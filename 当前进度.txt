@@ -1,0 +1,69 @@
+当前开发进度
+
+Windows：0.2.1，使用 C# / WPF。
+Mac / iPhone：0.1.0，本次未改动苹果端和 Rust 传输协议。
+
+本次改动
+- 补上 HEIC / HEIF 图片类型识别，接收历史和待发送列表使用图片缩略图，点击进入内置预览。
+- 多选入口中的“完成”改为“取消多选”；全选后可“取消全选”，清空选择并保留多选模式。
+- “显示”菜单可切换“按时间分组”或连续图片流；切换保留所选文件，选项保存在 settings.json 中。
+- 图片目标宽度由 220 缩为约 147，采用 10 像素圆角裁剪，窄窗口和宽窗口自动调整列数。
+- 历史图片按传输批次显示真实时间分隔，同批多图不拆开；重启后按接收批次目录恢复分组和时间。
+- 新增多选、跨分组连续选择、全选、批量复制、批量拖出和批量添加到待发送；支持 Ctrl、Shift、Esc 快捷操作。
+- 时间分隔仍放在原虚拟化瀑布流中，多选和时间整理分别拆到独立文件。
+- Windows 构建脚本补上 UTF-8 BOM，兼容系统 Windows PowerShell 的中文脚本解析。
+- 当前 Windows 前端工程为 windows/QuickTransfer.csproj，解决方案为 QuickTransfer.slnx。
+- 复用 AntoCopy 的通用控件和深浅色配色，主界面改为菜单、设备下拉框与图片流。
+- 移除设备、文字和记录的卡片容器；栏目只用分割线分隔。
+- 图片采用多列瀑布流，最新内容在左上角，图片文件名只在悬停提示中显示。
+- 文字编辑通过菜单打开，默认隐藏；关闭编辑窗口保留草稿。
+- 收到的文字独立弹窗，支持选择和复制，不混入图片流。
+- 设备列表原位更新，传输进度后台轮询并批量提交到界面。
+- 文件元数据和图片解码在后台完成；缩略图按可见卡片加载，最多同时解码两张图片。
+- 图片和待发送文件使用回收式虚拟化瀑布流，避免一次生成所有预览。
+- 文件拖入、文件卡片拖出和图片预览拖出改用 WPF 标准 OLE 文件拖放。
+- 保留剪贴板图片、文件、文字、接收确认、记住设备、托盘、单实例和 Ctrl + Alt + S。
+- 支持 Ctrl + Enter 发送；发送成功前保留草稿，失败时不清空。
+- 配置、身份私钥、信任列表、已接收文件继续使用原来的本地 QuickTransfer 目录。
+- 保存设备名或端口后自动重启服务；传输期间不允许修改设置。
+- 发布包自带 .NET 桌面运行时，无需安装 Windows App SDK。
+- 旧 WinUI 源码及旧构建产物保留在 build/archive/，当前工程和发布目录没有 WinUI 依赖。
+
+轻量验证
+- HEIC 修复已完成 Release 编译和自包含发布，零警告、零错误，并已重新启动本机客户端。
+- 使用已接收的 6 张真实 HEIC 确认缩略图全部显示，逐张打开内置预览；放大画面正常，检查结果位于 build/heic-check/。
+- 本次界面 Release 编译、自包含发布通过，零警告、零错误。
+- 使用本机已有真实图片检查时间分组、圆角、窄宽窗口、多选、连续选择、全选、批量拖出路径和批量添加待发送，通过。
+- 本机运行界面确认可跨时间分组选中两张真实图片；检查结果位于 build/gallery-selection-check/。
+- 本次没有向其他设备发送测试内容；实际拖到其他应用的落地效果仍需人工验收。
+- Rust Release 构建通过；上游 LocalSend 仍有原有未使用代码警告。
+- WPF Release 构建与自包含发布通过，C# 编译零警告、零错误。
+- 本机实际启动，传输核心就绪并发现真实 Mac。
+- 检查运行模块，已加载 WPF 和 Rust DLL，没有加载 WinUI 或 Windows App Runtime。
+- 原来接收的真实图片记录、缩略图及预览正常。
+- 主界面默认没有文字输入区；设备下拉框可展开并选择真实设备。
+- 文字菜单可打开编辑窗口，关闭重开后保留真实 README 草稿，清空后恢复空草稿。
+- 瀑布流滚动、回到顶部和真实图片预览通过本机检查。
+- 设置窗口拒绝无效端口，取消后不写入配置。
+- 本次没有向其他设备发送测试内容，没有预置模拟设备或业务记录。
+- 本机检查输出位于 build/wpf-check/ 和 build/gallery-check/，不会打入源码包。
+
+待人工验收
+- 在 WPF 新版中，将接收记录里的图片或预览图拖到桌面和其他应用，确认落地文件可打开。
+- 手动体验列表滚动、窗口缩放、选文件、图片粘贴和真实设备双向收发。
+- 本次未重新做 Mac / iPhone 的双向传输或传输中断检查，旧协议验证不能代替 WPF 交互验收。
+- 收到文字的自动弹窗已接通核心真实文字事件，尚未使用外部设备重新发送验收。
+
+工程说明
+- 启动程序：build/windows/x64/Release/QuickTransfer.exe。
+- Windows 构建：powershell -File windows/build.ps1；仅重编译界面可加 -SkipCore。
+- 工具路径：windows/build.json，使用 .NET 10 SDK 和 Rust 1.99.1 MSVC 工具链。
+- 主窗口与剪贴板：windows/MainWindow.xaml、MainWindow.xaml.cs、ClipboardOperations.cs。
+- 传输状态：windows/ViewModels/；Rust DLL、缩略图、配置、托盘、广播：windows/Services/。
+- 图片与拖出：windows/Controls/FileTile.xaml.cs；瀑布流：windows/Controls/MasonryPanel.cs、MasonryLayout.cs。
+- 多选交互：windows/GallerySelection.cs；时间分组：windows/ViewModels/GalleryTimeline.cs、windows/Models/GalleryHeader.cs。
+- 文字编辑和接收弹窗：windows/Views/TextComposeWindow.xaml、ReceivedTextWindow.cs。
+- 图片预览：windows/Views/FilePreviewWindow.cs。
+- Mac 构建：python3 scripts/build.py mac --configuration Release。
+- iPhone 使用 Xcode 的 QuickTransferiOS scheme，或在 Mac 桌面会话运行 scripts/build.py ios --configuration Release。
+- Mac 原开发目录：/Users/chongyang/Mac_Project/QuickTransfer。

@@ -1,0 +1,9 @@
+LocalSend Rust core
+https://github.com/localsend/localsend
+固定上游提交：92e133aa43869e94d394fd04fa70c50a0f796a64
+使用目录：vendor/localsend/packages/core
+许可证：Apache License 2.0，原文随源码中的 vendor/localsend/LICENSE 分发。
+
+Windows 前端使用 .NET 10 / WPF，发布目录包含微软 .NET 桌面运行时及其许可文件。
+通用 WPF 控件和主题配色来自本机 AntoCopy 工程。
+各依赖的版权和许可归相应作者所有，依赖版本记录在 core/Cargo.lock 和 windows/QuickTransfer.csproj。

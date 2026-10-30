@@ -1,0 +1,114 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Style x:Key="GalleryItem" TargetType="ListBoxItem" BasedOn="{StaticResource RecordItem}">
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusOutline}" />
+    <Setter Property="AutomationProperties.Name" Value="{Binding}" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+      <Grid>
+        <ContentPresenter />
+        <Border x:Name="SelectionOutline" BorderBrush="Transparent" BorderThickness="2" CornerRadius="10" IsHitTestVisible="False" />
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsSelected" Value="True"><Setter TargetName="SelectionOutline" Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsHeader}" Value="True">
+        <Setter Property="IsEnabled" Value="False" /><Setter Property="Focusable" Value="False" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="GallerySelectionCheck" TargetType="CheckBox">
+    <Setter Property="Width" Value="32" /><Setter Property="Height" Value="32" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+      <Grid Background="Transparent">
+        <Border x:Name="Circle" Width="22" Height="22" CornerRadius="11" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1">
+          <TextBlock x:Name="Check" Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+        </Border>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsChecked" Value="True">
+          <Setter TargetName="Circle" Property="Background" Value="{DynamicResource AccentBrush}" />
+          <Setter TargetName="Circle" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+          <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Circle" Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="MediaButton" TargetType="Button">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusOutline}" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Grid Background="{TemplateBinding Background}"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" /></Grid>
+      <ControlTemplate.Triggers><Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.85" /></Trigger></ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="RemoveMediaButton" TargetType="Button" BasedOn="{StaticResource MediaButton}">
+    <Setter Property="Width" Value="26" /><Setter Property="Height" Value="26" />
+    <Setter Property="Background" Value="{DynamicResource PageBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" /><Setter Property="FontSize" Value="11" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Border Background="{TemplateBinding Background}" CornerRadius="13"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="FlatSendButton" TargetType="Button" BasedOn="{StaticResource MediaButton}">
+    <Setter Property="MinWidth" Value="52" /><Setter Property="Height" Value="32" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Border Background="Transparent"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.75" /></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="DeviceOption" TargetType="ComboBoxItem">
+    <Setter Property="AutomationProperties.Name" Value="{Binding Alias}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="Padding" Value="12,9" /><Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
+      <Border x:Name="Row" Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter /></Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource RowHoverBrush}" /></Trigger>
+        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SelectBrush}" /></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="DeviceSelector" TargetType="ComboBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="Height" Value="32" />
+    <Setter Property="BorderThickness" Value="0" /><Setter Property="ItemContainerStyle" Value="{StaticResource DeviceOption}" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+      <Grid>
+        <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+          <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent"><ContentPresenter /></Border></ControlTemplate></ToggleButton.Template>
+        </ToggleButton>
+        <DockPanel Margin="0,0,8,0" IsHitTestVisible="False">
+          <TextBlock DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="12,0,0,0" />
+          <TextBlock Text="{Binding SelectedItem.Alias, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock x:Name="Placeholder" Text="选择设备" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" />
+        <Border x:Name="FocusLine" Height="1" Background="Transparent" VerticalAlignment="Bottom" />
+        <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
+          <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="320" Background="{DynamicResource PageBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,6,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" /></ScrollViewer>
+          </Border>
+        </Popup>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="SelectedIndex" Value="-1"><Setter TargetName="Placeholder" Property="Visibility" Value="Visible" /></Trigger>
+        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="FocusLine" Property="Background" Value="{DynamicResource AccentBrush}" /></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+</ResourceDictionary>

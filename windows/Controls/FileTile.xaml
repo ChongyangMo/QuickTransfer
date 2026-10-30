@@ -1,0 +1,49 @@
+<UserControl x:Class="QuickTransfer.Controls.FileTile"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Tile" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+  <Grid ClipToBounds="True" SizeChanged="UpdateClip">
+    <Button Style="{StaticResource MediaButton}" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}"
+            Click="OpenFile" PreviewMouseLeftButtonDown="BeginDrag" PreviewMouseMove="MoveDrag">
+      <Grid ClipToBounds="True">
+        <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="28"
+                   Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Visibility="{Binding HasThumbnail, Converter={StaticResource BoolVisibility}}" />
+        <Border Background="{DynamicResource PageBrush}">
+          <Border.Style>
+            <Style TargetType="Border"><Setter Property="Visibility" Value="Visible" />
+              <Style.Triggers><DataTrigger Binding="{Binding IsImage}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+            </Style>
+          </Border.Style>
+          <Grid Margin="0,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="24" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,6,0">
+              <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxHeight="44" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,4,0,0" />
+            </StackPanel>
+            <Border Grid.ColumnSpan="2" Height="1" Background="{DynamicResource BorderBrush}" VerticalAlignment="Bottom" />
+          </Grid>
+        </Border>
+      </Grid>
+    </Button>
+    <CheckBox HorizontalAlignment="Right" VerticalAlignment="Top" Margin="2"
+              IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Mode=TwoWay}"
+              Click="ToggleSelection" ToolTip="选择" AutomationProperties.Name="选择文件">
+      <CheckBox.Style>
+        <Style TargetType="CheckBox" BasedOn="{StaticResource GallerySelectionCheck}">
+          <Setter Property="Visibility" Value="Collapsed" />
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, ElementName=Tile}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+            <DataTrigger Binding="{Binding SelectionEnabled, ElementName=Tile}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+            <DataTrigger Binding="{Binding CanRemove, ElementName=Tile}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </CheckBox.Style>
+    </CheckBox>
+    <Button Style="{StaticResource RemoveMediaButton}" Content="&#xE711;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="4"
+            ToolTip="移除" AutomationProperties.Name="移除文件" Visibility="{Binding CanRemove, ElementName=Tile, Converter={StaticResource BoolVisibility}}"
+            Command="{Binding RemoveCommand, ElementName=Tile}" CommandParameter="{Binding}" />
+  </Grid>
+</UserControl>

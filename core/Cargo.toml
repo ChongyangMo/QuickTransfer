@@ -1,0 +1,25 @@
+[package]
+name = "quicktransfer"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+localsend = { path = "../vendor/localsend/packages/core", features = ["discovery"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["io", "rt"] }
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4"] }
+mime_guess = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
