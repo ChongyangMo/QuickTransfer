@@ -15,15 +15,9 @@ pub async fn handle(engine: Arc<Engine>, event: ServerEventV2) {
             let names: HashSet<_> = files.values().map(|file|file.file_name.to_lowercase()).collect();
             let valid = !files.is_empty() && files.len() <= 1000 && names.len() == files.len() && files.values().all(|file| file.size <= 1024*1024*1024*1024 && storage::receive_path(&engine.root, &session_id, &file.file_name).is_ok());
             if !valid { let _ = decision_tx.send(PrepareUploadDecisionV2::Decline); fail("拒绝接收", "文件名或数量无效"); return; }
-            let trusted = peer.protocol == "https" && engine.trusted.lock().unwrap().contains(&peer.id);
-            let total: u64 = files.values().map(|f|f.size).sum();
-            let preview = if files.len() == 1 { files.values().next().and_then(|f| if f.file_type == "text/plain" { f.preview.as_ref() } else { None }).cloned() } else { None };
-            engine.pending.lock().unwrap().insert(session_id.clone(), Pending { peer: peer.clone(), files, decision: decision_tx });
-            if trusted {
-                if let Err(err) = decide(&engine, &json!({"action":"accept","id":session_id,"remember":false})) { fail("接收失败",err); }
-            } else {
-                emit(json!({"type":"incoming","id":session_id,"peer":peer.id,"alias":peer.alias,"count":engine.pending.lock().unwrap()[&session_id].files.len(),"size":total,"text":preview}));
-            }
+            engine.pending.lock().unwrap().insert(session_id.clone(), Pending { peer, files, decision: decision_tx });
+            // 所有设备默认接收，不再弹出确认。
+            if let Err(err) = decide(&engine, &json!({"action":"accept","id":session_id,"remember":false})) { fail("接收失败",err); }
         }
         ServerEventV2::FileUpload { session_id, file_id, file, target_tx } => {
             let path = match storage::receive_path(&engine.root, &session_id, &file.file_name) { Ok(path) => path, Err(err) => { fail("接收失败",err); return; } };
