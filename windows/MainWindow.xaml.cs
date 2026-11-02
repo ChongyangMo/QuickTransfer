@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using QuickTransfer.Controls;
+using QuickTransfer.Models;
 using QuickTransfer.Services;
 using QuickTransfer.ViewModels;
 using QuickTransfer.Views;
@@ -91,6 +92,7 @@ public partial class MainWindow : Window
         var dialog = new PromptWindow(this, "设置", "保存");
         var alias = dialog.AddField("设备名称", Model.Settings.Alias);
         var port = dialog.AddField("端口", Model.Settings.Port.ToString());
+        var heicFormat = dialog.AddSelect("接收 HEIC", new[] { "保留原格式", "转为 JPG", "转为 PNG" }, (int)Model.Settings.HeicReceiveFormat);
         dialog.Validate = () => !string.IsNullOrWhiteSpace(alias.Text) && ValidPort(port.Text) ? "" : "请输入设备名称和有效端口";
         if (dialog.ShowDialog() != true) return;
         if (Model.IsTransferring) { Model.Status = "请等待传输结束后再修改设置"; return; }
@@ -98,8 +100,10 @@ public partial class MainWindow : Window
         {
             var name = alias.Text;
             var number = int.Parse(port.Text);
-            await System.Threading.Tasks.Task.Run(() => Model.Settings.Save(name, number));
-            Model.Restart();
+            var format = (HeicReceiveFormat)heicFormat.SelectedIndex;
+            var restart = name.Trim() != Model.Settings.Alias || number != Model.Settings.Port;
+            await System.Threading.Tasks.Task.Run(() => Model.Settings.Save(name, number, format));
+            if (restart) Model.Restart();
         }
         catch (Exception error) { Model.Report(error); }
     }

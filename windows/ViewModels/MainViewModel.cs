@@ -82,7 +82,8 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 if (Records.Any(record => record.Files.Any(item => string.Equals(item.Path, file.Path, StringComparison.OrdinalIgnoreCase)))) continue;
                 if (Records.Count >= 30) break;
-                var directory = Path.GetDirectoryName(file.Path)!;
+                var relative = Path.GetRelativePath(Path.Combine(Settings.Root, "received"), file.Path);
+                var directory = Path.Combine(Settings.Root, "received", relative.Split(Path.DirectorySeparatorChar)[0]);
                 var record = new TransferRecord(file.Path, file.Name, 0)
                 {
                     State = "已接收", Active = false, BatchId = Path.GetFileName(directory),

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using QuickTransfer.Services;
@@ -59,6 +60,21 @@ public sealed class PromptWindow : Window
     {
         var preview = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
         fields.Children.Add(new ScrollViewer { Content = preview, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+    }
+
+    public ComboBox AddSelect(string label, IReadOnlyList<string> options, int selectedIndex)
+    {
+        fields.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, fields.Children.Count == 0 ? 0 : 14, 0, 6) });
+        var select = new ComboBox
+        {
+            ItemsSource = options,
+            SelectedIndex = selectedIndex,
+            Height = 34,
+            Style = (Style)FindResource("Select")
+        };
+        System.Windows.Automation.AutomationProperties.SetName(select, label);
+        fields.Children.Add(select);
+        return select;
     }
 
     public CheckBox AddCheckBox(string label)

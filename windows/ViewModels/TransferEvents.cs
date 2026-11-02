@@ -70,11 +70,15 @@ public sealed partial class MainViewModel
                 if (record != null)
                 {
                     record.Progress = 100;
+                    if (type == "received")
+                    {
+                        _ = CompleteReceiveAsync(record, String(value, "path"), Settings.HeicReceiveFormat);
+                        break;
+                    }
                     record.Active = false;
                     ActiveTransfers.Remove(record);
-                    record.State = type == "sent" ? "已发送" : "已接收";
-                    if (type == "received") _ = LoadRecordFilesAsync(record, new[] { String(value, "path") });
-                    else PublishFiles(record);
+                    record.State = "已发送";
+                    PublishFiles(record);
                 }
                 break;
             case "text":
