@@ -34,7 +34,6 @@ public sealed class MasonryPanel : VirtualizingPanel, IScrollInfo
         if (owner == null) return default;
         var width = double.IsInfinity(available.Width) ? Math.Max(ActualWidth, 320) : Math.Max(1, available.Width);
         var height = double.IsInfinity(available.Height) ? 480 : Math.Max(0, available.Height);
-        viewport = new Size(width, height);
         if (dirty || Math.Abs(layoutWidth - width) > .5 || bounds.Length != owner.Items.Count)
         {
             var layout = MasonryLayout.Calculate(owner.Items, width, TargetWidth, 10, Compact);
@@ -43,6 +42,8 @@ public sealed class MasonryPanel : VirtualizingPanel, IScrollInfo
             layoutWidth = width;
             dirty = false;
         }
+        if (Compact) height = Math.Min(height, extent.Height);
+        viewport = new Size(width, height);
         offset = Math.Clamp(offset, 0, Math.Max(0, extent.Height - viewport.Height));
         ScrollOwner?.InvalidateScrollInfo();
         var cacheTop = offset - height / 2;

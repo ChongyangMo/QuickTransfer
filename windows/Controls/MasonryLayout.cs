@@ -26,7 +26,7 @@ internal static class MasonryLayout
                 continue;
             }
             var file = items[index] switch { Attachment attachment => attachment, GalleryItem item => item.File, _ => null };
-            var height = compact ? 112 : file is { IsImage: true } ? itemWidth / file.AspectRatio : 108;
+            var height = compact ? 56 : file is { IsImage: true } ? itemWidth / file.AspectRatio : 108;
             var column = 0;
             for (var candidate = 1; candidate < columns; candidate++)
                 if (heights[candidate] < heights[column]) column = candidate;
