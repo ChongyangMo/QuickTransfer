@@ -15,6 +15,7 @@ namespace QuickTransfer.Controls;
 internal sealed class GalleryDragSelection
 {
     private readonly ListBox list;
+    private readonly FrameworkElement surface;
     private readonly Action<GalleryItem?> beginSelection;
     private readonly DispatcherTimer timer;
     private readonly HashSet<GalleryItem> previousSelection = new();
@@ -28,15 +29,18 @@ internal sealed class GalleryDragSelection
     private ModifierKeys modifiers;
     private bool pending, active, moved;
 
-    public GalleryDragSelection(ListBox list, Action<GalleryItem?> beginSelection)
+    private FrameworkElement PointerRoot => (FrameworkElement?)window ?? surface;
+
+    public GalleryDragSelection(ListBox list, FrameworkElement surface, Action<GalleryItem?> beginSelection)
     {
         this.list = list;
+        this.surface = surface;
         this.beginSelection = beginSelection;
         timer = new DispatcherTimer(DispatcherPriority.Input, list.Dispatcher);
         timer.Tick += OnTick;
-        list.PreviewMouseLeftButtonDown += OnMouseDown;
-        list.PreviewMouseMove += OnMouseMove;
-        list.PreviewMouseLeftButtonUp += OnMouseUp;
+        surface.PreviewMouseLeftButtonDown += OnMouseDown;
+        surface.PreviewMouseMove += OnMouseMove;
+        surface.PreviewMouseLeftButtonUp += OnMouseUp;
         list.LostMouseCapture += OnLostCapture;
         list.Loaded += (_, _) =>
         {
@@ -59,12 +63,10 @@ internal sealed class GalleryDragSelection
         if (FindAncestor<ScrollBar>(source) != null || FindAncestor<CheckBox>(source) != null) return;
         panel = FindChild<MasonryPanel>(list);
         if (panel == null) return;
-        var position = args.GetPosition(panel);
-        if (!new Rect(panel.RenderSize).Contains(position)) return;
+        if (!new Rect(surface.RenderSize).Contains(args.GetPosition(surface))) return;
         pressedTile = FindAncestor<FileTile>(source);
         pressedItem = (ItemsControl.ContainerFromElement(list, source) as ListBoxItem)?.Content as GalleryItem;
-        origin = new Point(position.X, position.Y + panel.VerticalOffset);
-        pressPosition = args.GetPosition(list);
+        pressPosition = args.GetPosition(PointerRoot);
         modifiers = Keyboard.Modifiers;
         previousSelection.UnionWith(list.SelectedItems.OfType<GalleryItem>());
         pending = true;
@@ -73,7 +75,7 @@ internal sealed class GalleryDragSelection
         // 空白处由框选接管，图片上的短按与快速拖出仍交给原控件。
         if (pressedTile == null)
         {
-            list.CaptureMouse();
+            if (!list.CaptureMouse()) { Cancel(); return; }
             args.Handled = true;
         }
     }
@@ -82,7 +84,7 @@ internal sealed class GalleryDragSelection
     {
         if (!pending && !active) return;
         if (args.LeftButton != MouseButtonState.Pressed) { Cancel(); return; }
-        var delta = args.GetPosition(list) - pressPosition;
+        var delta = args.GetPosition(PointerRoot) - pressPosition;
         moved |= Math.Abs(delta.X) >= SystemParameters.MinimumHorizontalDragDistance ||
                  Math.Abs(delta.Y) >= SystemParameters.MinimumVerticalDragDistance;
         if (pending && moved)
@@ -129,8 +131,11 @@ internal sealed class GalleryDragSelection
         if (!list.CaptureMouse()) { Cancel(); return; }
         beginSelection(pressedItem);
         list.UpdateLayout();
-        layer = AdornerLayer.GetAdornerLayer(panel);
-        adorner = new SelectionAdorner(panel) { IsHitTestVisible = false };
+        // 多选工具栏出现后保持按下位置，框选范围包含列表四周留白。
+        var position = PointerRoot.TranslatePoint(pressPosition, panel);
+        origin = new Point(position.X, position.Y + panel.VerticalOffset);
+        layer = AdornerLayer.GetAdornerLayer(surface);
+        adorner = new SelectionAdorner(surface) { IsHitTestVisible = false };
         layer?.Add(adorner);
         timer.Interval = TimeSpan.FromMilliseconds(30);
         UpdateSelection();
@@ -139,9 +144,10 @@ internal sealed class GalleryDragSelection
     private void UpdateSelection()
     {
         if (panel == null || adorner == null) return;
-        var position = Mouse.GetPosition(panel);
-        var end = new Point(Math.Clamp(position.X, 0, panel.ViewportWidth),
-            Math.Clamp(position.Y, 0, panel.ViewportHeight) + panel.VerticalOffset);
+        var position = Mouse.GetPosition(surface);
+        var end = surface.TranslatePoint(new Point(Math.Clamp(position.X, 0, surface.ActualWidth),
+            Math.Clamp(position.Y, 0, surface.ActualHeight)), panel);
+        end.Y += panel.VerticalOffset;
         var area = new Rect(origin, end);
         area.Inflate(.5, .5);
         var desired = panel.ItemsInSelection(area).Where(index => index < list.Items.Count)
@@ -153,6 +159,7 @@ internal sealed class GalleryDragSelection
         foreach (var item in desired)
             if (list.Items.Contains(item) && !list.SelectedItems.Contains(item)) list.SelectedItems.Add(item);
         area.Offset(0, -panel.VerticalOffset);
+        area.Location = panel.TranslatePoint(area.Location, surface);
         adorner.Selection = area;
         adorner.InvalidateVisual();
     }

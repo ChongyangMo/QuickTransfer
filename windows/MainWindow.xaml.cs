@@ -30,7 +30,7 @@ public partial class MainWindow : Window
         Model = model;
         InitializeComponent();
         DataContext = model;
-        galleryDragSelection = new GalleryDragSelection(GalleryList, item =>
+        galleryDragSelection = new GalleryDragSelection(GalleryList, GallerySurface, item =>
         {
             Model.IsSelecting = true;
             if (item != null) selectionAnchor = item;

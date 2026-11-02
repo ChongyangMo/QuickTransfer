@@ -85,7 +85,8 @@
           <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
         </DockPanel>
       </Border>
-      <ListBox x:Name="GalleryList" Grid.Row="1" Style="{StaticResource TransferList}" ItemContainerStyle="{StaticResource GalleryItem}"
+      <Grid x:Name="GallerySurface" Grid.Row="1" Background="Transparent">
+      <ListBox x:Name="GalleryList" Style="{StaticResource TransferList}" ItemContainerStyle="{StaticResource GalleryItem}"
                SelectionMode="Extended" SelectionChanged="GallerySelectionChanged" ItemsSource="{Binding GalleryTimeline}"
                Margin="14,4,14,14" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="图片与文件">
         <ListBox.Resources>
@@ -101,6 +102,7 @@
         </ListBox.Resources>
         <ListBox.ItemsPanel><ItemsPanelTemplate><controls:MasonryPanel /></ItemsPanelTemplate></ListBox.ItemsPanel>
       </ListBox>
+      </Grid>
     </Grid>
     <Border Grid.Row="5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="14,8"
             Visibility="{Binding HasStatus, Converter={StaticResource BoolVisibility}}">
