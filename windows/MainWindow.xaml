@@ -39,8 +39,16 @@
       </Menu>
     </Border>
     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,6">
-      <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
-                SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
+                  SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center"
+                    Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
+          <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <Button Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" AutomationProperties.Name="{Binding SelectAllLabel}" />
+        </StackPanel>
+      </Grid>
     </Border>
     <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8"
             Visibility="{Binding HasActiveTransfers, Converter={StaticResource BoolVisibility}}">
@@ -74,15 +82,7 @@
       </DockPanel>
     </Border>
     <Grid Grid.Row="4">
-      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-      <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,4"
-              Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
-        <DockPanel>
-          <Button DockPanel.Dock="Left" Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" AutomationProperties.Name="{Binding SelectAllLabel}" />
-          <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
-        </DockPanel>
-      </Border>
-      <Grid x:Name="GallerySurface" Grid.Row="1" Background="Transparent">
+      <Grid x:Name="GallerySurface" Background="Transparent">
         <ListBox x:Name="GalleryList" Style="{StaticResource TransferList}" ItemContainerStyle="{StaticResource GalleryItem}"
                  SelectionMode="Extended" SelectionChanged="GallerySelectionChanged" ItemsSource="{Binding GalleryTimeline}"
                  Margin="14,4,14,14" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="图片与文件">
