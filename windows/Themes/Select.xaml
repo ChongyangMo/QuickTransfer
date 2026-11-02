@@ -6,9 +6,9 @@
 
   <Style x:Key="SelectOption" TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="Padding" Value="10,8" />
-    <Setter Property="Margin" Value="0,2" />
-    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Padding" Value="4,4" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="MinHeight" Value="28" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -16,9 +16,9 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ComboBoxItem">
-          <Border x:Name="Row" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+          <Border x:Name="Row" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
             <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="24" /></Grid.ColumnDefinitions>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="20" /></Grid.ColumnDefinitions>
               <ContentPresenter VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
               <Path x:Name="Check" Grid.Column="1" Data="M 1,6 L 5,10 L 12,2" Width="13" Height="12"
@@ -44,13 +44,13 @@
   </Style>
 
   <Style x:Key="Select" TargetType="ComboBox">
-    <Setter Property="Height" Value="36" />
+    <Setter Property="Height" Value="28" />
     <Setter Property="MaxDropDownHeight" Value="280" />
     <Setter Property="Background" Value="{DynamicResource CardBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="10,0,36,0" />
+    <Setter Property="Padding" Value="8,0,28,0" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="IsTextSearchEnabled" Value="True" />
@@ -68,7 +68,7 @@
               <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                   <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                          BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" />
+                          BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" />
                 </ControlTemplate>
               </ToggleButton.Template>
             </ToggleButton>
@@ -79,26 +79,25 @@
             <TextBlock x:Name="Placeholder" Text="{DynamicResource SelectPlaceholder}" Margin="{TemplateBinding Padding}"
                        Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Visibility="Collapsed" IsHitTestVisible="False" />
-            <Path x:Name="Arrow" Data="M 1,1 L 6,6 L 11,1" Width="12" Height="7" Margin="0,0,12,0"
+            <Path x:Name="Arrow" Data="M 1,1 L 5,5 L 9,1" Width="10" Height="6" Margin="0,0,10,0"
                   Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round"
                   StrokeEndLineCap="Round" StrokeLineJoin="Round" HorizontalAlignment="Right" VerticalAlignment="Center"
                   RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
               <Path.RenderTransform><RotateTransform Angle="0" /></Path.RenderTransform>
             </Path>
             <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
-                   PlacementTarget="{Binding ElementName=Root}" HorizontalOffset="-8" AllowsTransparency="True"
+                   PlacementTarget="{Binding ElementName=Root}" VerticalOffset="4" AllowsTransparency="True"
                    Focusable="False" StaysOpen="False">
               <Border x:Name="Menu" Width="{Binding ActualWidth, ElementName=Root}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                      Margin="8,6,8,14" Padding="6" CornerRadius="10" Background="{DynamicResource CardBrush}"
+                      Padding="3" CornerRadius="6" Background="{DynamicResource CardBrush}"
                       BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                <Border.Effect><DropShadowEffect Color="Black" BlurRadius="14" ShadowDepth="3" Opacity="0.2" /></Border.Effect>
                 <Grid>
                   <ScrollViewer x:Name="DropDownScrollViewer" VerticalScrollBarVisibility="Auto"
                                 HorizontalScrollBarVisibility="Disabled" CanContentScroll="True">
                     <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
                   </ScrollViewer>
                   <TextBlock x:Name="EmptyText" Text="{DynamicResource SelectEmptyText}" Foreground="{DynamicResource MutedBrush}"
-                             Margin="10,10" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
+                             Margin="4,3" TextTrimming="CharacterEllipsis" Visibility="Collapsed" />
                 </Grid>
               </Border>
             </Popup>
@@ -128,6 +127,9 @@
       <system:String x:Key="SelectPlaceholder">选择设备</system:String>
       <system:String x:Key="SelectEmptyText">暂无在线设备</system:String>
     </Style.Resources>
+    <Setter Property="MaxWidth" Value="240" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="ItemContainerStyle" Value="{StaticResource DeviceOption}" />
     <Setter Property="TextSearch.TextPath" Value="Alias" />
     <Setter Property="ItemTemplate">
