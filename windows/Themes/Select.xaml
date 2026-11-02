@@ -127,13 +127,16 @@
       <system:String x:Key="SelectPlaceholder">选择设备</system:String>
       <system:String x:Key="SelectEmptyText">暂无在线设备</system:String>
     </Style.Resources>
+    <Setter Property="Height" Value="Auto" />
+    <Setter Property="MinHeight" Value="28" />
     <Setter Property="MaxWidth" Value="240" />
+    <Setter Property="Padding" Value="8,4,32,4" />
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="ItemContainerStyle" Value="{StaticResource DeviceOption}" />
     <Setter Property="TextSearch.TextPath" Value="Alias" />
     <Setter Property="ItemTemplate">
-      <Setter.Value><DataTemplate><TextBlock Text="{Binding Alias}" TextTrimming="CharacterEllipsis" /></DataTemplate></Setter.Value>
+      <Setter.Value><DataTemplate><TextBlock Text="{Binding Alias}" TextWrapping="Wrap" /></DataTemplate></Setter.Value>
     </Setter>
   </Style>
 </ResourceDictionary>
