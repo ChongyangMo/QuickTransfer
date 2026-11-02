@@ -86,28 +86,6 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true) Model.Probe(host.Text.Trim(), int.Parse(port.Text));
     }
 
-    private async void OpenSettings(object sender, RoutedEventArgs args)
-    {
-        if (Model.IsTransferring) { Model.Status = "请等待传输结束后再修改设置"; return; }
-        var dialog = new PromptWindow(this, "设置", "保存");
-        var alias = dialog.AddField("设备名称", Model.Settings.Alias);
-        var port = dialog.AddField("端口", Model.Settings.Port.ToString());
-        var heicFormat = dialog.AddSelect("接收 HEIC", new[] { "保留原格式", "转为 JPG", "转为 PNG" }, (int)Model.Settings.HeicReceiveFormat);
-        dialog.Validate = () => !string.IsNullOrWhiteSpace(alias.Text) && ValidPort(port.Text) ? "" : "请输入设备名称和有效端口";
-        if (dialog.ShowDialog() != true) return;
-        if (Model.IsTransferring) { Model.Status = "请等待传输结束后再修改设置"; return; }
-        try
-        {
-            var name = alias.Text;
-            var number = int.Parse(port.Text);
-            var format = (HeicReceiveFormat)heicFormat.SelectedIndex;
-            var restart = name.Trim() != Model.Settings.Alias || number != Model.Settings.Port;
-            await System.Threading.Tasks.Task.Run(() => Model.Settings.Save(name, number, format));
-            if (restart) Model.Restart();
-        }
-        catch (Exception error) { Model.Report(error); }
-    }
-
     private static bool ValidPort(string value) => int.TryParse(value, out var port) && port is >= 1 and <= 65535;
 
     private void Receive(JsonElement value)

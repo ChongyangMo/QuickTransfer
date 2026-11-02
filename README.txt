@@ -18,6 +18,8 @@ Mac / iPhone：SwiftUI、AppKit / UIKit；Windows：C# / WPF。
 7. 找不到设备时可用“+”输入对方 IP 和端口，默认 53317。
 8. 如果同一台电脑上的 LocalSend 已占用 53317，可修改快传设置中的端口。
    Windows 修改设备名称或端口后自动重启接收服务，正在传输时不允许修改。
+   Windows 收到的文件默认保存到“下载\快传”，设置中的“保存目录”可修改位置。
+   文件直接保存在所选目录，同名自动加序号；改目录后旧图片仍保留在原处并继续显示。
 9. 默认保留文件原始内容。iPhone 收到照片后可预览，或通过分享存储到照片。
    Windows 主界面采用图片瀑布流，最新内容在左上角，点击查看完整图片。
    图片缩小约三分之一并显示圆角，按每次传输批次显示时间分隔。
@@ -73,7 +75,8 @@ Windows：powershell -File windows/build.ps1
 配置与文件
 Mac：用户 Library/Application Support/QuickTransfer。
 iPhone：App Group 内 Library/Application Support/QuickTransfer。
-Windows：当前用户本地应用数据目录下 QuickTransfer。
+Windows：配置保存在当前用户本地应用数据目录下 QuickTransfer，接收文件默认保存在系统“下载”目录下的“快传”文件夹。
+received-files.json 保存接收文件位置与批次记录，兼容原 received 目录中的历史文件。
 settings.json 为界面配置，identity.json 为本机私钥及证书，trusted.json 为用户记住的证书。
 请勿把 identity.json 放入源码仓库或分发给其他设备。
 

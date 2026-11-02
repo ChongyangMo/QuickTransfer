@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using QuickTransfer.Services;
 
 namespace QuickTransfer.Views;
@@ -60,6 +62,25 @@ public sealed class PromptWindow : Window
     {
         var preview = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
         fields.Children.Add(new ScrollViewer { Content = preview, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+    }
+
+    public TextBox AddFolderField(string label, string value)
+    {
+        var field = AddField(label, value);
+        fields.Children.Remove(field);
+        var row = new DockPanel();
+        var browse = new Button { Content = "选择…", Height = 34, Margin = new Thickness(8, 0, 0, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(browse, "选择" + label);
+        browse.Click += (_, _) =>
+        {
+            var picker = new OpenFolderDialog { Title = "选择" + label, InitialDirectory = Directory.Exists(field.Text) ? field.Text : Path.GetDirectoryName(value) };
+            if (picker.ShowDialog(this) == true) { field.Text = picker.FolderName; field.CaretIndex = field.Text.Length; }
+        };
+        DockPanel.SetDock(browse, Dock.Right);
+        row.Children.Add(browse);
+        row.Children.Add(field);
+        fields.Children.Add(row);
+        return field;
     }
 
     public ComboBox AddSelect(string label, IReadOnlyList<string> options, int selectedIndex)

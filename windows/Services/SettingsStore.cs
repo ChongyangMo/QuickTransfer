@@ -12,6 +12,8 @@ public sealed class SettingsStore
     public JsonObject Values { get; private set; }
     public string Alias => Values["alias"]?.GetValue<string>() ?? Environment.MachineName;
     public int Port => Values["port"]?.GetValue<int>() ?? 53317;
+    public string ReceiveDirectory => Values["receiveDirectory"]?.GetValue<string>() is { Length: > 0 } directory
+        ? directory : ReceiveDirectories.DefaultDirectory;
     public bool GroupGalleryByTime => Values["galleryGroupByTime"]?.GetValue<bool>() ?? true;
     public HeicReceiveFormat HeicReceiveFormat => Values["heicReceiveFormat"]?.GetValue<string>() switch
     {
@@ -30,11 +32,12 @@ public sealed class SettingsStore
         if (Port is < 1 or > 65535) throw new InvalidDataException("端口必须为 1 到 65535");
     }
 
-    public void Save(string alias, int port, HeicReceiveFormat heicReceiveFormat)
+    public void Save(string alias, int port, HeicReceiveFormat heicReceiveFormat, string? receiveDirectory = null)
     {
         var next = (JsonObject)Values.DeepClone();
         next["alias"] = alias.Trim();
         next["port"] = port;
+        next["receiveDirectory"] = ReceiveDirectories.EnsureWritable(receiveDirectory ?? ReceiveDirectory);
         next["heicReceiveFormat"] = heicReceiveFormat switch
         {
             HeicReceiveFormat.Original => "original",

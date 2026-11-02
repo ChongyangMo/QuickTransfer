@@ -20,6 +20,13 @@ public sealed partial class MainViewModel
                 Trace.WriteLine(Status);
             }
         }
+        record.State = "正在保存";
+        try { path = await receivedFiles.StoreAsync(path, Settings.ReceiveDirectory, record.BatchId, record.StartedAt); }
+        catch (Exception error)
+        {
+            Status = "保存到接收目录失败，文件已保留：" + error.Message;
+            Trace.WriteLine(Status);
+        }
         record.Active = false;
         ActiveTransfers.Remove(record);
         record.State = "已接收";

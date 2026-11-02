@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -13,6 +12,7 @@ namespace QuickTransfer.ViewModels;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly TransferCore core;
+    private readonly ReceivedFileStore receivedFiles;
     public SettingsStore Settings { get; }
     public FileService FileService { get; } = new();
     public ObservableCollection<Peer> Devices { get; } = new();
@@ -47,6 +47,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         this.core = core;
         Settings = settings;
+        receivedFiles = new ReceivedFileStore(settings.Root);
         SendCommand = new Command(_ => Send(), _ => ready && !sending && SelectedDevice != null && (Text.Length > 0 || Attachments.Count > 0));
         RemoveCommand = new Command(value => { if (value is Attachment file) Attachments.Remove(file); });
         RefreshCommand = new Command(_ => Run(() => { if (ready) core.Send(new { action = "refresh" }); else Restart(); }));
@@ -72,30 +73,6 @@ public sealed partial class MainViewModel : ObservableObject
             Attachments.Insert(0, file);
         }
         Status = "";
-    }
-
-    public async Task LoadReceivedAsync()
-    {
-        try
-        {
-            foreach (var file in await FileService.ReadReceivedAsync(Settings.Root))
-            {
-                if (Records.Any(record => record.Files.Any(item => string.Equals(item.Path, file.Path, StringComparison.OrdinalIgnoreCase)))) continue;
-                if (Records.Count >= 30) break;
-                var relative = Path.GetRelativePath(Path.Combine(Settings.Root, "received"), file.Path);
-                var directory = Path.Combine(Settings.Root, "received", relative.Split(Path.DirectorySeparatorChar)[0]);
-                var record = new TransferRecord(file.Path, file.Name, 0)
-                {
-                    State = "已接收", Active = false, BatchId = Path.GetFileName(directory),
-                    StartedAt = new DateTimeOffset(Directory.GetCreationTimeUtc(directory))
-                };
-                record.Files.Add(file);
-                record.FilesChanged();
-                Records.Add(record);
-                PublishFiles(record, false);
-            }
-        }
-        catch (Exception error) { Report(error); }
     }
 
     private void Send()
