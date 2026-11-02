@@ -14,9 +14,8 @@ public sealed partial class MainViewModel
     public bool IsSelecting
     {
         get => isSelecting;
-        set { if (Set(ref isSelecting, value)) Notify(nameof(SelectionLabel)); }
+        set => Set(ref isSelecting, value);
     }
-    public string SelectionLabel => IsSelecting ? "取消多选" : "多选";
     public int SelectedGalleryCount
     {
         get => selectedGalleryCount;
