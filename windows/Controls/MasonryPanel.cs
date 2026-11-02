@@ -68,7 +68,8 @@ public sealed class MasonryPanel : VirtualizingPanel, IScrollInfo
             using (generator.StartAt(position, GeneratorDirection.Forward, true))
             {
                 var element = (UIElement)generator.GenerateNext(out var generated);
-                if (generated)
+                // 回收容器可能不标记为新生成，但此前已从可视树移除，仍须重新挂回。
+                if (generated || VisualTreeHelper.GetParent(element) != this)
                 {
                     if (childIndex >= InternalChildren.Count) AddInternalChild(element);
                     else InsertInternalChild(childIndex, element);
