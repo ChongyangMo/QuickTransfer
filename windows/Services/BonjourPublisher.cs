@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +43,8 @@ public sealed class BonjourPublisher
 
         public Registration(int port)
         {
-            var host = Environment.MachineName;
+            // MachineName 是最长 15 个字符的 NetBIOS 名称，mDNS 只响应完整主机名。
+            var host = Dns.GetHostName();
             instance = DnsServiceConstructInstance(host + "._quicktransfer._tcp.local", host + ".local", IntPtr.Zero, IntPtr.Zero, (ushort)port, 0, 0, 0, IntPtr.Zero, IntPtr.Zero);
             if (instance == IntPtr.Zero) throw new InvalidOperationException("创建设备广播失败");
             callback = (status, _, result) =>
