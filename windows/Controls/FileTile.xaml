@@ -1,7 +1,14 @@
 <UserControl x:Class="QuickTransfer.Controls.FileTile"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Name="Tile" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+             x:Name="Tile" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+             PreviewMouseRightButtonDown="PreserveSelection">
+  <UserControl.ContextMenu>
+    <ContextMenu>
+      <MenuItem Header="在资源管理器中打开" Click="OpenInExplorer" />
+      <MenuItem Header="属性" Click="ShowFileProperties" />
+    </ContextMenu>
+  </UserControl.ContextMenu>
   <UserControl.Resources>
     <DataTemplate x:Key="GalleryFileContent">
       <Grid ClipToBounds="True">

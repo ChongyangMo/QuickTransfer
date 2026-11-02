@@ -47,6 +47,7 @@
                     Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
           <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
           <Button Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" AutomationProperties.Name="{Binding SelectAllLabel}" />
+          <Button Style="{StaticResource FlatSendButton}" Content="取消选择" Click="CancelGallerySelection" Margin="8,0,0,0" AutomationProperties.Name="取消选择" />
         </StackPanel>
       </Grid>
     </Border>

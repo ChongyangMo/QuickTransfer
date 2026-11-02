@@ -13,6 +13,8 @@ public partial class MainWindow
 {
     private GalleryItem? selectionAnchor;
 
+    private void CancelGallerySelection(object sender, RoutedEventArgs args) => ClearGallerySelection();
+
     private void ClearGallerySelection()
     {
         galleryDragSelection.Cancel();

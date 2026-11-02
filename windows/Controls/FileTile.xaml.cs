@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuickTransfer.Models;
+using QuickTransfer.Services;
 using QuickTransfer.Views;
 
 namespace QuickTransfer.Controls;
@@ -44,6 +45,24 @@ public partial class FileTile : UserControl
         args.Handled = true;
         if (DataContext is Attachment file && Window.GetWindow(this) is MainWindow window)
             window.AnchorGallerySelection(file);
+    }
+
+    private void PreserveSelection(object sender, MouseButtonEventArgs args) => args.Handled = true;
+
+    private void OpenInExplorer(object sender, RoutedEventArgs args) =>
+        RunFileAction(file => ShellFileActions.OpenInExplorer(file.Path));
+
+    private void ShowFileProperties(object sender, RoutedEventArgs args) =>
+        RunFileAction(file => ShellFileActions.ShowProperties(Window.GetWindow(this), file.Path));
+
+    private void RunFileAction(Action<Attachment> action)
+    {
+        if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
+        window.Model.Run(() =>
+        {
+            action(file);
+            window.Model.Status = "";
+        });
     }
 
     private void BeginDrag(object sender, MouseButtonEventArgs args)
