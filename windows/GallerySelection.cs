@@ -111,7 +111,7 @@ public partial class MainWindow
 
     private bool HandleGalleryKey(KeyEventArgs args)
     {
-        if (Keyboard.FocusedElement is TextBox) return false;
+        if (Keyboard.FocusedElement is TextBox || DevicePicker.IsKeyboardFocusWithin || DevicePicker.IsDropDownOpen) return false;
         if (args.Key == Key.Escape && Model.IsSelecting) { ClearGallerySelection(); return true; }
         if (!GalleryList.IsKeyboardFocusWithin && !Model.IsSelecting) return false;
         if (Keyboard.Modifiers == ModifierKeys.Control && args.Key == Key.A) { SelectAllGallery(this, args); return true; }

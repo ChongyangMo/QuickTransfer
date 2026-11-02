@@ -42,8 +42,8 @@
       <DockPanel LastChildFill="True">
         <Button DockPanel.Dock="Right" Style="{StaticResource FlatSendButton}" Content="{Binding SendLabel}" Command="{Binding SendCommand}" AutomationProperties.Name="发送" Margin="14,0,0,0" />
         <Button DockPanel.Dock="Right" Style="{StaticResource FlatSendButton}" Content="{Binding SelectionLabel}" Click="ToggleGallerySelection" AutomationProperties.Name="{Binding SelectionLabel}" />
-        <ComboBox Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
-                  DisplayMemberPath="Alias" AutomationProperties.Name="在线设备" />
+        <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
+                  SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
       </DockPanel>
     </Border>
     <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8"

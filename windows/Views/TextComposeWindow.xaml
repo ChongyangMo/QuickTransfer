@@ -7,7 +7,7 @@
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,6">
-      <ComboBox Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" DisplayMemberPath="Alias" AutomationProperties.Name="接收设备" />
+      <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="接收设备" />
     </Border>
     <TextBox x:Name="Composer" Grid.Row="1" Style="{StaticResource Composer}" Background="{DynamicResource PageBrush}"
              Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Margin="14" AutomationProperties.Name="待发送文字" />

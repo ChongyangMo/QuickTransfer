@@ -72,43 +72,4 @@
       </ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
   </Style>
-  <Style x:Key="DeviceOption" TargetType="ComboBoxItem">
-    <Setter Property="AutomationProperties.Name" Value="{Binding Alias}" />
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="Padding" Value="12,9" /><Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem">
-      <Border x:Name="Row" Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter /></Border>
-      <ControlTemplate.Triggers>
-        <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource RowHoverBrush}" /></Trigger>
-        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SelectBrush}" /></Trigger>
-      </ControlTemplate.Triggers>
-    </ControlTemplate></Setter.Value></Setter>
-  </Style>
-  <Style x:Key="DeviceSelector" TargetType="ComboBox">
-    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" /><Setter Property="Height" Value="32" />
-    <Setter Property="BorderThickness" Value="0" /><Setter Property="ItemContainerStyle" Value="{StaticResource DeviceOption}" />
-    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
-    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
-      <Grid>
-        <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
-          <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent"><ContentPresenter /></Border></ControlTemplate></ToggleButton.Template>
-        </ToggleButton>
-        <DockPanel Margin="0,0,8,0" IsHitTestVisible="False">
-          <TextBlock DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="12,0,0,0" />
-          <TextBlock Text="{Binding SelectedItem.Alias, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-        </DockPanel>
-        <TextBlock x:Name="Placeholder" Text="选择设备" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False" />
-        <Border x:Name="FocusLine" Height="1" Background="Transparent" VerticalAlignment="Bottom" />
-        <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
-          <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="320" Background="{DynamicResource PageBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,6,0,0">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" /></ScrollViewer>
-          </Border>
-        </Popup>
-      </Grid>
-      <ControlTemplate.Triggers>
-        <Trigger Property="SelectedIndex" Value="-1"><Setter TargetName="Placeholder" Property="Visibility" Value="Visible" /></Trigger>
-        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="FocusLine" Property="Background" Value="{DynamicResource AccentBrush}" /></Trigger>
-      </ControlTemplate.Triggers>
-    </ControlTemplate></Setter.Value></Setter>
-  </Style>
 </ResourceDictionary>

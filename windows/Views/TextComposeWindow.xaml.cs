@@ -27,6 +27,6 @@ public partial class TextComposeWindow : Window
     {
         if (args.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
         { main.Model.SendCommand.Execute(null); args.Handled = true; }
-        else if (args.Key == Key.Escape) Close();
+        else if (args.Key == Key.Escape && !DevicePicker.IsDropDownOpen) Close();
     }
 }

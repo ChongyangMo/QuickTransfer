@@ -7,6 +7,7 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="Themes/Light.xaml" />
         <ResourceDictionary Source="Themes/Controls.xaml" />
+        <ResourceDictionary Source="Themes/Select.xaml" />
         <ResourceDictionary Source="Themes/Transfer.xaml" />
         <ResourceDictionary Source="Themes/Gallery.xaml" />
       </ResourceDictionary.MergedDictionaries>
