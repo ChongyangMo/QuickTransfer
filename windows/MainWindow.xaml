@@ -61,7 +61,7 @@
     <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8"
             Visibility="{Binding HasAttachments, Converter={StaticResource BoolVisibility}}">
       <ListBox Style="{StaticResource TransferList}" ItemContainerStyle="{StaticResource RecordItem}" ItemsSource="{Binding Attachments}"
-               Padding="0" MaxHeight="122" VerticalAlignment="Top" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="待发送文件">
+               Padding="0" MaxHeight="124" VerticalAlignment="Top" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="待发送文件">
         <ListBox.ItemsPanel><ItemsPanelTemplate><controls:MasonryPanel Compact="True" TargetWidth="240" /></ItemsPanelTemplate></ListBox.ItemsPanel>
         <ListBox.ItemTemplate>
           <DataTemplate><controls:FileTile CanRemove="True" RemoveCommand="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}" /></DataTemplate>
