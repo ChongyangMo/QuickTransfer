@@ -45,10 +45,12 @@ public sealed class MasonryPanel : VirtualizingPanel, IScrollInfo
         }
         offset = Math.Clamp(offset, 0, Math.Max(0, extent.Height - viewport.Height));
         ScrollOwner?.InvalidateScrollInfo();
-        var generator = ItemContainerGenerator;
         var cacheTop = offset - height / 2;
         var cacheBottom = offset + height * 1.5;
-        for (var child = InternalChildren.Count - 1; child >= 0; child--)
+        // 先初始化子元素，兼容后台启动时先恢复文件、后显示窗口。
+        var childCount = InternalChildren.Count;
+        var generator = ItemContainerGenerator;
+        for (var child = childCount - 1; child >= 0; child--)
         {
             var index = generator.IndexFromGeneratorPosition(new GeneratorPosition(child, 0));
             if (index >= 0 && index < bounds.Length && bounds[index].Bottom >= cacheTop && bounds[index].Top <= cacheBottom) continue;
