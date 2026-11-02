@@ -39,12 +39,8 @@
       </Menu>
     </Border>
     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,6">
-      <DockPanel LastChildFill="True">
-        <Button DockPanel.Dock="Right" Style="{StaticResource FlatSendButton}" Content="{Binding SendLabel}" Command="{Binding SendCommand}" AutomationProperties.Name="发送" Margin="14,0,0,0" />
-        <Button DockPanel.Dock="Right" Style="{StaticResource FlatSendButton}" Content="{Binding SelectionLabel}" Click="ToggleGallerySelection" AutomationProperties.Name="{Binding SelectionLabel}" />
-        <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
-                  SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
-      </DockPanel>
+      <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
+                SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
     </Border>
     <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8"
             Visibility="{Binding HasActiveTransfers, Converter={StaticResource BoolVisibility}}">
@@ -77,10 +73,6 @@
       <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,4"
               Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-            <Button Style="{StaticResource FlatSendButton}" Content="复制" Click="CopyGallerySelection" IsEnabled="{Binding HasGallerySelection}" AutomationProperties.Name="复制所选文件" />
-            <Button Style="{StaticResource FlatSendButton}" Content="添加" Click="StageGallerySelection" IsEnabled="{Binding HasGallerySelection}" ToolTip="添加到待发送" AutomationProperties.Name="添加所选文件到待发送" />
-          </StackPanel>
           <Button DockPanel.Dock="Left" Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" AutomationProperties.Name="{Binding SelectAllLabel}" />
           <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
         </DockPanel>

@@ -13,12 +13,6 @@ public partial class MainWindow
 {
     private GalleryItem? selectionAnchor;
 
-    private void ToggleGallerySelection(object sender, RoutedEventArgs args)
-    {
-        Model.IsSelecting = !Model.IsSelecting;
-        if (!Model.IsSelecting) ClearGallerySelection();
-    }
-
     private void ClearGallerySelection()
     {
         galleryDragSelection.Cancel();
@@ -95,18 +89,6 @@ public partial class MainWindow
             Clipboard.SetFileDropList(files);
             Model.Status = "";
         });
-    }
-
-    private async void StageGallerySelection(object sender, RoutedEventArgs args)
-    {
-        try
-        {
-            var paths = SelectedGalleryPaths();
-            if (paths.Length == 0) return;
-            await Model.AddFilesAsync(paths);
-            ClearGallerySelection();
-        }
-        catch (Exception error) { Model.Report(error); }
     }
 
     private bool HandleGalleryKey(KeyEventArgs args)
