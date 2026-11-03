@@ -18,6 +18,7 @@ final class TransferService: ObservableObject {
     @Published var selected: String? { didSet { settings.lastPeer = selected; saveSettings() } }
     @Published var text = ""
     @Published var attachments: [URL] = []
+    @Published private(set) var importingPhotos = false
     @Published var rows: [TransferRow] = []
     @Published var incoming: Incoming?
     @Published var error: String?
@@ -31,6 +32,9 @@ final class TransferService: ObservableObject {
     private var bonjour: BonjourDiscovery?
     private var hasStarted = false
     private var outgoingDrafts: [String:(String,[URL])] = [:]
+    #if os(iOS)
+    private var photoImportBatches = 0
+    #endif
     #if DEBUG
     private lazy var verification = NativeVerification(service:self)
     #endif
@@ -151,6 +155,8 @@ final class TransferService: ObservableObject {
 
     func stagePhotos(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        photoImportBatches += 1
+        importingPhotos = true
         Task { [weak self] in
             guard let self else { return }
             await withTaskGroup(of: PhotoImportResult.self) { group in
@@ -175,6 +181,8 @@ final class TransferService: ObservableObject {
                     }
                 }
             }
+            photoImportBatches = max(0, photoImportBatches - 1)
+            importingPhotos = photoImportBatches > 0
         }
     }
 

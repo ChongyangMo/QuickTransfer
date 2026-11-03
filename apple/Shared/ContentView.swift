@@ -58,7 +58,7 @@ struct ContentView: View {
                     Button { service.paste() } label:{ Label("粘贴",systemImage:"doc.on.clipboard") }.buttonStyle(.borderless).keyboardShortcut("v",modifiers:.command)
                     #endif
                     Spacer(minLength:0)
-                    Button("发送") { service.send() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!service.ready || service.selected==nil || (service.text.isEmpty && service.attachments.isEmpty)).keyboardShortcut(.return,modifiers:.command)
+                    Button("发送") { service.send() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!service.ready || service.selected==nil || service.importingPhotos || (service.text.isEmpty && service.attachments.isEmpty)).keyboardShortcut(.return,modifiers:.command)
                 }
             }.padding(16)
             if !shareMode && !service.rows.isEmpty {
