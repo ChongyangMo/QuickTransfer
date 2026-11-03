@@ -91,15 +91,9 @@ struct ContentView: View {
         .frame(minWidth:370,minHeight:420)
         #else
         .onChange(of:photos) { _,items in
-            Task {
-                do {
-                    for item in items {
-                        guard let photo = try await item.loadTransferable(type:ImportedPhoto.self) else { throw CocoaError(.fileReadUnknown) }
-                        service.attachments.append(photo.url)
-                    }
-                    photos=[]
-                } catch { service.error="读取照片失败：\(error.localizedDescription)" }
-            }
+            guard !items.isEmpty else { return }
+            photos=[]
+            service.stagePhotos(items)
         }
         #endif
     }

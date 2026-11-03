@@ -6,6 +6,9 @@ import AppKit
 #else
 import UIKit
 #endif
+#if os(iOS)
+import PhotosUI
+#endif
 
 @MainActor
 final class TransferService: ObservableObject {
@@ -140,6 +143,52 @@ final class TransferService: ObservableObject {
         }
         #endif
     }
+    #if os(iOS)
+    private enum PhotoImportResult: Sendable {
+        case success(URL)
+        case failure(String)
+    }
+
+    func stagePhotos(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            await withTaskGroup(of: PhotoImportResult.self) { group in
+                var nextIndex = 0
+                let concurrentLimit = min(3, items.count)
+                for _ in 0..<concurrentLimit {
+                    let item = items[nextIndex]
+                    nextIndex += 1
+                    group.addTask { await Self.importPhoto(item) }
+                }
+                while let result = await group.next() {
+                    switch result {
+                    case .success(let url):
+                        attachments.append(url)
+                    case .failure(let message):
+                        error = "读取照片失败：\(message)"
+                    }
+                    if nextIndex < items.count {
+                        let item = items[nextIndex]
+                        nextIndex += 1
+                        group.addTask { await Self.importPhoto(item) }
+                    }
+                }
+            }
+        }
+    }
+
+    private nonisolated static func importPhoto(_ item: PhotosPickerItem) async -> PhotoImportResult {
+        do {
+            guard let photo = try await item.loadTransferable(type: ImportedPhoto.self) else {
+                return .failure("照片内容不可用")
+            }
+            return .success(photo.url)
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
+    #endif
     nonisolated static func copyToOutbox(_ source: URL, root: URL) throws -> URL {
         let dir = root.appendingPathComponent("outbox").appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
