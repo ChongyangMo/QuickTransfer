@@ -4,8 +4,10 @@ use anyhow::{Context, ensure};
 use serde::{Serialize, de::DeserializeOwned};
 
 pub fn save<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
+    // 数据目录可能在运行期间被外部删除，写入前补建，避免 os error 3。
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent).with_context(|| format!("创建目录失败：{}", parent.display()))?; }
     let temp = path.with_extension("json.tmp");
-    fs::write(&temp, serde_json::to_vec_pretty(value)?)?;
+    fs::write(&temp, serde_json::to_vec_pretty(value)?).with_context(|| format!("写入失败：{}", temp.display()))?;
     #[cfg(unix)] {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&temp, fs::Permissions::from_mode(0o600))?;
