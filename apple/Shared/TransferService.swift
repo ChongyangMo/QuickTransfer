@@ -27,6 +27,8 @@ final class TransferService: ObservableObject {
     @Published var showSettings = false
     @Published var showAddress = false
     @Published var preview: URL?
+    /// 收到文件或文字时回调（名称或发送方，文字内容），iOS 用于后台通知。
+    var onReceive: ((String,String?)->Void)?
     let root: URL
     private var timer: Timer?
     private var bonjour: BonjourDiscovery?
@@ -268,9 +270,11 @@ final class TransferService: ObservableObject {
                 rows[index].path = value["path"] as? String
                 saveHistory()
             }
+            if type == "received" { onReceive?(value["name"] as? String ?? "",nil) }
         case "text":
             rows.insert(TransferRow(id:id,name:value["alias"] as? String ?? "文字",size:0,direction:"receive",state:"已接收",text:value["text"] as? String,finished:true),at:0)
             saveHistory()
+            onReceive?(value["alias"] as? String ?? "",value["text"] as? String ?? "")
         case "failed", "cancelled":
             if let draft=outgoingDrafts.removeValue(forKey:id),text.isEmpty,attachments.isEmpty { text=draft.0;attachments=draft.1 }
             if let index = rows.firstIndex(where:{$0.id == id}) { rows[index].finished = true; rows[index].state = value["message"] as? String ?? "已取消" }
