@@ -374,9 +374,6 @@ struct TransferRowView: View {
         if row.size > 0 {
             parts.append(ByteCountFormatter.string(fromByteCount:row.size,countStyle:.file))
         }
-        if checkedFiles && row.text == nil && !row.fileURLs.isEmpty && existingFileURLs.isEmpty && row.finished {
-            parts.append("缓存已清理")
-        }
         return parts.joined(separator:" · ")
     }
 
@@ -542,6 +539,7 @@ struct ReceiveSheet: View {
 struct SettingsView:View {
     @ObservedObject var service:TransferService
     @Environment(\.dismiss) private var dismiss
+    @State private var showClearCacheConfirm = false
     private let presetDays = [3, 7, 30, 365]
 
     private var retentionDaysBinding: Binding<Double> {
@@ -565,7 +563,7 @@ struct SettingsView:View {
                         dismiss()
                     }
                 }
-                Section("发送缓存清理") {
+                Section {
                     VStack(alignment:.leading,spacing:10) {
                         HStack {
                             Text("缓存保留时间")
@@ -597,11 +595,15 @@ struct SettingsView:View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("立即清理",role:.destructive) {
-                            service.clearOutboxCacheNow()
+                            showClearCacheConfirm = true
                         }
                         .buttonStyle(.borderless)
                         .disabled(service.cacheItemCount == 0)
                     }
+                } header: {
+                    Text("发送缓存清理")
+                } footer: {
+                    Text("清理发送缓存时，对应的发送历史记录也会自动清除。")
                 }
             }
             .navigationTitle("设置")
@@ -612,6 +614,14 @@ struct SettingsView:View {
                     service.cleanExpiredOutbox()
                     dismiss()
                 }
+            }
+            .alert("清除发送缓存？",isPresented:$showClearCacheConfirm) {
+                Button("取消",role:.cancel) {}
+                Button("清除缓存和记录",role:.destructive) {
+                    service.clearOutboxCacheNow()
+                }
+            } message: {
+                Text("清除缓存会同时删除对应的发送历史记录，且无法恢复。")
             }
             .onAppear { service.refreshCacheStats() }
         }.frame(minWidth:340,minHeight:360)

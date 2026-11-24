@@ -357,8 +357,9 @@ final class TransferService: ObservableObject {
         let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let active = activeOutboxFolders()
+        let snapshotRows = rows
         Task { [weak self] in
-            let stats = await Task.detached(priority: .utility) {
+            let (stats, deadRowIDs) = await Task.detached(priority: .utility) {
                 let fm = FileManager.default
                 let keys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey]
                 if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: Array(keys)) {
@@ -370,28 +371,59 @@ final class TransferService: ObservableObject {
                         }
                     }
                 }
-                return Self.measureOutbox(at: outboxRoot, excluding: active)
+                let measured = Self.measureOutbox(at: outboxRoot, excluding: active)
+                let dead = Self.findDeadFileRowIDs(in: snapshotRows)
+                return (measured, dead)
             }.value
-            self?.cacheItemCount = stats.count
-            self?.cacheSizeBytes = stats.bytes
+            guard let self else { return }
+            self.cacheItemCount = stats.count
+            self.cacheSizeBytes = stats.bytes
+            self.removeRows(withIDs: deadRowIDs)
         }
     }
     func clearOutboxCacheNow() {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let active = activeOutboxFolders()
+        let snapshotRows = rows
         Task { [weak self] in
-            let stats = await Task.detached(priority: .userInitiated) {
+            let (stats, deadRowIDs) = await Task.detached(priority: .userInitiated) {
                 let fm = FileManager.default
                 if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) {
                     for entry in entries where !active.contains(entry.lastPathComponent) {
                         try? fm.removeItem(at: entry)
                     }
                 }
-                return Self.measureOutbox(at: outboxRoot, excluding: active)
+                let measured = Self.measureOutbox(at: outboxRoot, excluding: active)
+                let dead = Self.findDeadFileRowIDs(in: snapshotRows)
+                return (measured, dead)
             }.value
-            self?.cacheItemCount = stats.count
-            self?.cacheSizeBytes = stats.bytes
+            guard let self else { return }
+            self.cacheItemCount = stats.count
+            self.cacheSizeBytes = stats.bytes
+            self.removeRows(withIDs: deadRowIDs)
         }
+    }
+    private func removeRows(withIDs ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let before = rows.count
+        rows.removeAll { ids.contains($0.id) }
+        if rows.count != before {
+            saveHistory()
+        }
+    }
+    private nonisolated static func findDeadFileRowIDs(in rows: [TransferRow]) -> Set<String> {
+        let fm = FileManager.default
+        var dead = Set<String>()
+        for row in rows {
+            guard row.finished, row.text == nil else { continue }
+            let urls = row.fileURLs
+            guard !urls.isEmpty else { continue }
+            let hasAnyAlive = urls.contains { fm.fileExists(atPath: $0.path) }
+            if !hasAnyAlive {
+                dead.insert(row.id)
+            }
+        }
+        return dead
     }
     private nonisolated static func measureOutbox(at outboxRoot: URL, excluding active: Set<String>) -> (count: Int, bytes: Int64) {
         let fm = FileManager.default
