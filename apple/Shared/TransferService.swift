@@ -344,12 +344,12 @@ final class TransferService: ObservableObject {
     func refreshCacheStats() {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let active = activeOutboxFolders()
-        Task.detached(priority: .utility) { [weak self] in
-            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
-            await MainActor.run {
-                self?.cacheItemCount = stats.count
-                self?.cacheSizeBytes = stats.bytes
-            }
+        Task { [weak self] in
+            let stats = await Task.detached(priority: .utility) {
+                Self.measureOutbox(at: outboxRoot, excluding: active)
+            }.value
+            self?.cacheItemCount = stats.count
+            self?.cacheSizeBytes = stats.bytes
         }
     }
     func cleanExpiredOutbox() {
@@ -357,40 +357,40 @@ final class TransferService: ObservableObject {
         let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let active = activeOutboxFolders()
-        Task.detached(priority: .utility) { [weak self] in
-            let fm = FileManager.default
-            let keys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey]
-            if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: Array(keys)) {
-                for entry in entries where !active.contains(entry.lastPathComponent) {
-                    let values = try? entry.resourceValues(forKeys: keys)
-                    let modified = values?.contentModificationDate ?? values?.creationDate
-                    if let modified, modified < cutoff {
-                        try? fm.removeItem(at: entry)
+        Task { [weak self] in
+            let stats = await Task.detached(priority: .utility) {
+                let fm = FileManager.default
+                let keys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey]
+                if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: Array(keys)) {
+                    for entry in entries where !active.contains(entry.lastPathComponent) {
+                        let values = try? entry.resourceValues(forKeys: keys)
+                        let modified = values?.contentModificationDate ?? values?.creationDate
+                        if let modified, modified < cutoff {
+                            try? fm.removeItem(at: entry)
+                        }
                     }
                 }
-            }
-            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
-            await MainActor.run {
-                self?.cacheItemCount = stats.count
-                self?.cacheSizeBytes = stats.bytes
-            }
+                return Self.measureOutbox(at: outboxRoot, excluding: active)
+            }.value
+            self?.cacheItemCount = stats.count
+            self?.cacheSizeBytes = stats.bytes
         }
     }
     func clearOutboxCacheNow() {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let active = activeOutboxFolders()
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let fm = FileManager.default
-            if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) {
-                for entry in entries where !active.contains(entry.lastPathComponent) {
-                    try? fm.removeItem(at: entry)
+        Task { [weak self] in
+            let stats = await Task.detached(priority: .userInitiated) {
+                let fm = FileManager.default
+                if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) {
+                    for entry in entries where !active.contains(entry.lastPathComponent) {
+                        try? fm.removeItem(at: entry)
+                    }
                 }
-            }
-            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
-            await MainActor.run {
-                self?.cacheItemCount = stats.count
-                self?.cacheSizeBytes = stats.bytes
-            }
+                return Self.measureOutbox(at: outboxRoot, excluding: active)
+            }.value
+            self?.cacheItemCount = stats.count
+            self?.cacheSizeBytes = stats.bytes
         }
     }
     private nonisolated static func measureOutbox(at outboxRoot: URL, excluding active: Set<String>) -> (count: Int, bytes: Int64) {
