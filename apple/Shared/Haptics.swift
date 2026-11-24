@@ -140,88 +140,50 @@ final class Haptics {
         let delay: Double
 
         switch intent {
+        // 轻脆单震：滑选/点选照片、滑动条、快捷天数、开关
         case .selection:
             events = [
-                transient(time: 0, intensity: 0.58, sharpness: 0.88)
+                transient(time: 0, intensity: 0.62, sharpness: 0.95)
             ]
-            delay = 0.25
+            delay = 0.22
 
-        case .deviceSwitch:
+        // 标准清脆单震：切换设备、普通按钮、展开/收起、完成、取消
+        case .tap, .deviceSwitch, .expand, .collapse:
             events = [
-                transient(time: 0, intensity: 0.56, sharpness: 0.68),
-                transient(time: 0.048, intensity: 0.80, sharpness: 0.92),
+                transient(time: 0, intensity: 0.76, sharpness: 0.95)
             ]
-            delay = 0.3
+            delay = 0.22
 
-        case .tap:
+        // 有力清脆单震：下拉刷新、置顶、发起发送、重发、接收、连接
+        case .pullRefresh, .action, .pin, .confirm:
             events = [
-                transient(time: 0, intensity: 0.68, sharpness: 0.80)
+                transient(time: 0, intensity: 0.88, sharpness: 0.95)
             ]
-            delay = 0.25
+            delay = 0.24
 
-        case .expand:
+        // 清脆上扬双震：发送成功、复制成功、清理完成
+        case .complete:
             events = [
-                transient(time: 0, intensity: 0.54, sharpness: 0.45),
-                transient(time: 0.055, intensity: 0.74, sharpness: 0.80),
-            ]
-            delay = 0.3
-
-        case .collapse:
-            events = [
-                transient(time: 0, intensity: 0.68, sharpness: 0.75),
-                transient(time: 0.052, intensity: 0.50, sharpness: 0.40),
-            ]
-            delay = 0.3
-
-        case .pullRefresh:
-            // 单击高锐度清脆触发，干脆利落不拖尾
-            events = [
-                transient(time: 0, intensity: 0.86, sharpness: 0.95)
-            ]
-            delay = 0.25
-
-        case .pin:
-            events = [
-                transient(time: 0, intensity: 0.80, sharpness: 0.35),
-                transient(time: 0.068, intensity: 0.88, sharpness: 0.92),
+                transient(time: 0, intensity: 0.68, sharpness: 0.92),
+                transient(time: 0.085, intensity: 0.94, sharpness: 0.95),
             ]
             delay = 0.32
 
-        case .action:
-            events = [
-                transient(time: 0, intensity: 0.84, sharpness: 0.72)
-            ]
-            delay = 0.28
-
-        case .confirm:
-            events = [
-                transient(time: 0, intensity: 0.88, sharpness: 0.76),
-                transient(time: 0.085, intensity: 0.68, sharpness: 0.55),
-            ]
-            delay = 0.35
-
-        case .complete:
-            events = [
-                transient(time: 0, intensity: 0.60, sharpness: 0.65),
-                transient(time: 0.065, intensity: 0.78, sharpness: 0.82),
-                transient(time: 0.145, intensity: 0.96, sharpness: 0.92),
-            ]
-            delay = 0.45
-
+        // 沉稳警示双震：删除记录、移除附件、立即清理、拒绝、取消传输
         case .warning:
             events = [
-                transient(time: 0, intensity: 0.92, sharpness: 0.42),
-                transient(time: 0.095, intensity: 0.84, sharpness: 0.34),
+                transient(time: 0, intensity: 0.90, sharpness: 0.55),
+                transient(time: 0.09, intensity: 0.82, sharpness: 0.45),
             ]
-            delay = 0.38
+            delay = 0.34
 
+        // 浑厚报错双震：发送失败、读取失败、连接错误
         case .failure:
             events = [
-                transient(time: 0, intensity: 1.0, sharpness: 0.38),
-                transient(time: 0.075, intensity: 0.95, sharpness: 0.30),
-                transient(time: 0.155, intensity: 1.0, sharpness: 0.24),
+                transient(time: 0, intensity: 1.0, sharpness: 0.40),
+                transient(time: 0.095, intensity: 1.0, sharpness: 0.35),
             ]
-            delay = 0.48
+            delay = 0.36
         }
 
         return (try CHHapticPattern(events: events, parameters: []), delay)
