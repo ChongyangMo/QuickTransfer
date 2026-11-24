@@ -11,6 +11,12 @@ import Photos
 import PhotosUI
 #endif
 
+struct StatusToast: Equatable {
+    let id = UUID()
+    let success: Bool
+    let text: String
+}
+
 @MainActor
 final class TransferService: ObservableObject {
     static let shared = TransferService()
@@ -28,6 +34,7 @@ final class TransferService: ObservableObject {
     @Published var rows: [TransferRow] = []
     @Published var incoming: Incoming?
     @Published var error: String?
+    @Published private(set) var toast: StatusToast?
     @Published var ready = false
     @Published var settings: Settings
     @Published var showSettings = false
@@ -41,6 +48,7 @@ final class TransferService: ObservableObject {
     private var hasStarted = false
     private var outgoingDrafts: [String:(String,[URL])] = [:]
     private var peerGraceTask: Task<Void, Never>?
+    private var toastTask: Task<Void, Never>?
     #if os(iOS)
     private var photoImportBatches = 0
     #endif
@@ -152,6 +160,32 @@ final class TransferService: ObservableObject {
             guard !Task.isCancelled, let self else { return }
             self.cachedPeers = []
             self.peerGraceTask = nil
+        }
+    }
+    func probeDevice(host: String, port: UInt16) {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        command(["action":"probe","host":trimmed,"port":port])
+        showToast(success: true, text: "正在连接 \(trimmed)…")
+    }
+    func dismissToast() {
+        toastTask?.cancel()
+        toastTask = nil
+        toast = nil
+    }
+    private func showToast(success: Bool, text: String) {
+        toastTask?.cancel()
+        let item = StatusToast(success: success, text: text)
+        toast = item
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(success ? .success : .error)
+        #endif
+        let duration: UInt64 = success ? 2_200_000_000 : 3_200_000_000
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: duration)
+            guard !Task.isCancelled, let self, self.toast?.id == item.id else { return }
+            self.toast = nil
+            self.toastTask = nil
         }
     }
     private func saveCachedPeers(_ list: [Peer]) {
@@ -638,7 +672,11 @@ final class TransferService: ObservableObject {
         case "progress":
             if let index = rows.firstIndex(where:{$0.id == id}), !rows[index].finished { rows[index].bytes = (value["bytes"] as? NSNumber)?.int64Value ?? 0 }
         case "sent", "received":
-            if type == "sent" { outgoingDrafts.removeValue(forKey:id) }
+            if type == "sent" {
+                outgoingDrafts.removeValue(forKey:id)
+                let peerName = (value["peer"] as? String)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
+                showToast(success:true, text: peerName.isEmpty ? "发送成功" : "已发送至 \(peerName)")
+            }
             if let index = rows.firstIndex(where:{$0.id == id}) {
                 rows[index].finished = true; rows[index].bytes = rows[index].size
                 rows[index].state = type == "sent" ? "已发送":"已接收"
@@ -655,7 +693,11 @@ final class TransferService: ObservableObject {
         case "failed", "cancelled":
             if let draft=outgoingDrafts.removeValue(forKey:id),text.isEmpty,attachments.isEmpty { text=draft.0;attachments=draft.1 }
             if let index = rows.firstIndex(where:{$0.id == id}) { rows[index].finished = true; rows[index].state = value["message"] as? String ?? "已取消" }
-            if type == "failed" { error = value["message"] as? String }
+            if type == "failed" {
+                let message = value["message"] as? String ?? "发送失败"
+                error = message
+                showToast(success:false, text:message)
+            }
         case "error": error = value["message"] as? String
         default: break
         }

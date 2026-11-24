@@ -121,8 +121,11 @@ struct ContentView: View {
                 .accessibilityLabel("输入文字")
 
                 Button { service.refresh() } label:{ Image(systemName:"arrow.clockwise") }.help("刷新设备").accessibilityLabel("刷新设备")
-                Button { service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
-                if !shareMode { Button { service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置") }
+                if shareMode {
+                    Button { service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
+                } else {
+                    Button { service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置")
+                }
             }
         }
         .fileImporter(isPresented:$importing,allowedContentTypes:[.item],allowsMultipleSelection:true) { result in
@@ -130,9 +133,37 @@ struct ContentView: View {
         }
         .sheet(item:$service.incoming) { incoming in ReceiveSheet(incoming:incoming,service:service) }
         .sheet(isPresented:$service.showSettings) { SettingsView(service:service) }
-        .sheet(isPresented:$service.showAddress) { AddressView(service:service) }
+        .sheet(isPresented:$service.showAddress) {
+            NavigationStack {
+                AddressView(service:service,isSheet:true)
+            }
+            .frame(minWidth:320,minHeight:260)
+        }
         .quickLookPreview($service.preview)
         .onDrop(of:[UTType.fileURL,UTType.image],isTargeted:nil) { service.importDropped($0) }
+        .overlay(alignment:.bottom) {
+            if let toast = service.toast {
+                HStack(spacing:8) {
+                    Image(systemName:toast.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(toast.success ? .green : .red)
+                    Text(toast.text)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal,16)
+                .padding(.vertical,10)
+                .background(.ultraThinMaterial,in:Capsule())
+                .overlay(Capsule().stroke(toast.success ? Color.green.opacity(0.28) : Color.red.opacity(0.28),lineWidth:0.8))
+                .shadow(color:.black.opacity(0.12),radius:10,y:4)
+                .padding(.horizontal,20)
+                .padding(.bottom,18)
+                .transition(.move(edge:.bottom).combined(with:.opacity))
+                .onTapGesture { service.dismissToast() }
+            }
+        }
+        .animation(.snappy(duration:0.25),value:service.toast)
         .onAppear {
             if !service.text.isEmpty {
                 showTextComposer = true
@@ -627,6 +658,11 @@ struct SettingsView:View {
                         TextField("例如：我的 iPhone",text:$service.settings.alias)
                             .multilineTextAlignment(.trailing)
                     }
+                    NavigationLink {
+                        AddressView(service:service,onConnected:{ dismiss() })
+                    } label: {
+                        Label("手动添加设备",systemImage:"network")
+                    }
                     if connectionChanged {
                         Button("应用更改并重新连接") {
                             saveAndDismiss(forceRestart:true)
@@ -726,17 +762,77 @@ struct SettingsView:View {
 }
 struct AddressView:View {
     @ObservedObject var service:TransferService
-    @State private var host=""
-    @State private var port:UInt16=53317
+    var isSheet = false
+    var onConnected: (() -> Void)? = nil
+    @State private var host = ""
+    @State private var port: UInt16 = 53317
+    @State private var showPort = false
+    @FocusState private var hostFocused: Bool
     @Environment(\.dismiss) private var dismiss
+
+    private var trimmedHost: String {
+        host.trimmingCharacters(in:.whitespacesAndNewlines)
+    }
+
     var body:some View {
-        NavigationStack {
-            Form {
-                TextField("IP 地址",text:$host).autocorrectionDisabled()
-                TextField("端口",value:$port,format:.number.grouping(.never))
-                Button("连接") { service.command(["action":"probe","host":host.trimmingCharacters(in:.whitespaces),"port":port]);dismiss() }.disabled(host.trimmingCharacters(in:.whitespaces).isEmpty)
-            }.padding().navigationTitle("添加设备").toolbar { Button("取消") { dismiss() } }
-        }.frame(minWidth:320,minHeight:220)
+        Form {
+            Section {
+                LabeledContent("IP 地址") {
+                    TextField("例如 192.168.1.100",text:$host)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .focused($hostFocused)
+                        #if os(iOS)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                }
+                DisclosureGroup("自定义端口（默认 \(String(port))）",isExpanded:$showPort) {
+                    LabeledContent("端口") {
+                        TextField("53317",value:$port,format:.number.grouping(.never))
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            #if os(iOS)
+                            .keyboardType(.numberPad)
+                            #endif
+                    }
+                }
+            } header: {
+                Text("目标设备")
+            } footer: {
+                Text("仅在局域网自动发现搜不到对方设备时，通过 IP 手动直连。")
+            }
+
+            Section {
+                Button {
+                    service.probeDevice(host:trimmedHost,port:port)
+                    if let onConnected {
+                        onConnected()
+                    } else {
+                        dismiss()
+                    }
+                } label: {
+                    Text("连接设备")
+                        .font(.body.weight(.medium))
+                        .frame(maxWidth:.infinity,alignment:.center)
+                }
+                .disabled(trimmedHost.isEmpty)
+            }
+        }
+        .navigationTitle("手动添加设备")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            if isSheet {
+                ToolbarItem(placement:.cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+        }
+        .onAppear {
+            hostFocused = true
+        }
     }
 }
 
