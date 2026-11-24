@@ -6,6 +6,7 @@ import AppKit
 #endif
 #if os(iOS)
 import PhotosUI
+import UIKit
 #endif
 
 struct ContentView: View {
@@ -13,7 +14,6 @@ struct ContentView: View {
     var shareMode = false
     @State private var importing = false
     @State private var showTextComposer = false
-    @State private var pasteControlReady = false
     @FocusState private var textFocused: Bool
     #if os(iOS)
     @State private var photos: [PhotosPickerItem] = []
@@ -53,9 +53,6 @@ struct ContentView: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(service.rows.count) 条")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
                 .padding(.horizontal,16)
                 .padding(.top,10)
@@ -63,9 +60,10 @@ struct ContentView: View {
 
                 List(service.rows) { row in
                     TransferRowView(row:row,service:service)
-                        .listRowInsets(EdgeInsets(top:4,leading:16,bottom:4,trailing:16))
+                        .listRowInsets(EdgeInsets(top:6,leading:16,bottom:6,trailing:16))
                 }
                 .listStyle(.plain)
+                .ignoresSafeArea(.keyboard,edges:.bottom)
             } else if !service.rows.isEmpty {
                 Divider()
                 ForEach(service.rows.filter{!$0.finished}.prefix(1)) { row in
@@ -104,7 +102,6 @@ struct ContentView: View {
         .onAppear {
             if !service.text.isEmpty {
                 showTextComposer = true
-                pasteControlReady = true
             }
         }
         .onChange(of:service.text) { oldValue,value in
@@ -198,59 +195,54 @@ struct ContentView: View {
     }
 
     private var composerSection: some View {
-        VStack(alignment:.leading,spacing:10) {
-            if showTextComposer {
-                VStack(alignment:.leading,spacing:8) {
-                    TextField("输入要发送的文字…",text:$service.text,axis:.vertical)
-                        .lineLimit(2...5)
-                        .textFieldStyle(.plain)
-                        .focused($textFocused)
-                        .accessibilityLabel("发送文字")
-                    HStack(spacing:10) {
-                        #if os(iOS)
-                        ZStack(alignment:.leading) {
-                            if pasteControlReady {
-                                PasteButton(payloadType:String.self) { strings in
-                                    let pasted = strings.joined(separator:"\n")
-                                    if !pasted.isEmpty { service.text = pasted }
-                                }
-                                .labelStyle(.titleAndIcon)
-                                .buttonBorderShape(.capsule)
-                                .controlSize(.small)
-                                .transition(.opacity)
-                            }
-                        }
-                        .frame(minHeight:28)
-                        #else
-                        Button { service.paste() } label: {
-                            Label("粘贴",systemImage:"doc.on.clipboard")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .keyboardShortcut("v",modifiers:.command)
-                        #endif
-                        if !service.text.isEmpty {
-                            Button("清空") { service.text = "" }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .buttonStyle(.plain)
-                        }
-                        Spacer()
-                        Button { closeTextComposer() } label: {
-                            Text("收起")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
+        VStack(alignment:.leading,spacing:0) {
+            // 常驻轻量输入容器，平滑插值高度与透明度，避免首次挂载 TextField 卡顿
+            VStack(alignment:.leading,spacing:8) {
+                TextField("输入要发送的文字…",text:$service.text,axis:.vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.plain)
+                    .focused($textFocused)
+                    .accessibilityLabel("发送文字")
+                HStack(spacing:10) {
+                    Button { pasteText() } label: {
+                        Label("粘贴",systemImage:"doc.on.clipboard")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal,10)
+                            .padding(.vertical,5)
+                            .background(Color.secondary.opacity(0.14),in:Capsule())
                     }
+                    .buttonStyle(.plain)
+                    #if os(macOS)
+                    .keyboardShortcut("v",modifiers:.command)
+                    #endif
+
+                    if !service.text.isEmpty {
+                        Button("清空") { service.text = "" }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                    }
+                    Spacer()
+                    Button { closeTextComposer() } label: {
+                        Text("收起")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(12)
-                .background(Color.secondary.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
-                .transition(.opacity)
             }
+            .padding(12)
+            .background(Color.secondary.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
+            .frame(height:showTextComposer ? nil : 0,alignment:.top)
+            .opacity(showTextComposer ? 1 : 0)
+            .clipped()
+            .allowsHitTesting(showTextComposer)
+            .padding(.bottom,showTextComposer ? 10 : 0)
 
             if !service.attachments.isEmpty {
                 FileStrip(urls:service.attachments,service:service,removable:true)
+                    .padding(.bottom,10)
             }
 
             if service.importingPhotos {
@@ -260,6 +252,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.bottom,10)
             }
 
             HStack(spacing:10) {
@@ -313,13 +306,22 @@ struct ContentView: View {
                     .controlSize(.regular)
                     .disabled(!service.canSendToSelectedPeer || service.pendingAutoSend || (!service.importingPhotos && service.text.isEmpty && service.attachments.isEmpty))
                     .keyboardShortcut(.return,modifiers:.command)
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with:.scale(scale:0.92)))
                 }
             }
         }
         .padding(.horizontal,14)
         .padding(.vertical,12)
-        .clipped()
+    }
+
+    private func pasteText() {
+        #if os(iOS)
+        if let pasted = UIPasteboard.general.string, !pasted.isEmpty {
+            service.text = pasted
+        }
+        #else
+        service.paste()
+        #endif
     }
 
     private func toggleTextComposer() {
@@ -331,28 +333,17 @@ struct ContentView: View {
     }
 
     private func openTextComposer(focus: Bool) {
-        pasteControlReady = false
-        withAnimation(.snappy(duration:0.24,extraBounce:0)) {
+        withAnimation(.spring(response:0.32,dampingFraction:0.9)) {
             showTextComposer = true
         }
         if focus {
-            Task { @MainActor in
-                textFocused = true
-            }
-        }
-        // 延后挂载跨进程 PasteButton，避免首帧 XPC 初始化拖卡展开动画
-        DispatchQueue.main.asyncAfter(deadline:.now()+0.22) {
-            guard showTextComposer else { return }
-            withAnimation(.easeIn(duration:0.12)) {
-                pasteControlReady = true
-            }
+            textFocused = true
         }
     }
 
     private func closeTextComposer() {
         textFocused = false
-        pasteControlReady = false
-        withAnimation(.snappy(duration:0.22,extraBounce:0)) {
+        withAnimation(.spring(response:0.28,dampingFraction:0.92)) {
             showTextComposer = false
         }
     }
@@ -363,19 +354,23 @@ struct TransferRowView: View {
     @ObservedObject var service: TransferService
     @State private var existingFileURLs: [URL] = []
     @State private var checkedFiles = false
+    @State private var copiedFeedback = false
 
-    private var iconName: String {
-        if row.text != nil { return "text.bubble.fill" }
-        return row.direction == "send" ? "arrow.up.right" : "arrow.down.left"
+    private var isInteractive: Bool {
+        row.text != nil || !existingFileURLs.isEmpty
     }
 
-    private var iconColor: Color {
+    private var directionIcon: String {
+        row.direction == "send" ? "arrow.up.right" : "arrow.down.left"
+    }
+
+    private var directionColor: Color {
         if row.text != nil { return .purple }
         return row.direction == "send" ? .accentColor : .green
     }
 
     private var subtitleText: String {
-        var parts = [row.state]
+        var parts = [copiedFeedback ? "已复制到剪贴板" : row.state]
         if row.size > 0 {
             parts.append(ByteCountFormatter.string(fromByteCount:row.size,countStyle:.file))
         }
@@ -386,90 +381,77 @@ struct TransferRowView: View {
     }
 
     var body: some View {
-        HStack(alignment:.top,spacing:10) {
-            Image(systemName:iconName)
-                .font(.caption.bold())
-                .foregroundStyle(iconColor)
-                .frame(width:28,height:28)
-                .background(iconColor.opacity(0.12),in:Circle())
-                .padding(.top,2)
+        HStack(alignment:.center,spacing:12) {
+            leadingThumbnail
 
-            VStack(alignment:.leading,spacing:5) {
+            VStack(alignment:.leading,spacing:4) {
                 HStack(alignment:.firstTextBaseline,spacing:6) {
                     Text(row.text ?? row.name)
                         .font(.subheadline.weight(.medium))
-                        .lineLimit(row.text != nil ? 4 : 1)
-                        .textSelection(.enabled)
+                        .foregroundStyle(.primary)
+                        .lineLimit(row.text != nil ? 2 : 1)
                     Spacer(minLength:4)
                     Text(row.started,style:.time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                if !row.finished { ProgressView(value:row.progress) }
-                Text(subtitleText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                if !existingFileURLs.isEmpty {
-                    FileStrip(urls:existingFileURLs,service:service)
-                        .padding(.top,2)
+
+                if !row.finished {
+                    ProgressView(value:row.progress)
+                        .padding(.vertical,1)
+                }
+
+                HStack(spacing:4) {
+                    Image(systemName:directionIcon)
+                        .font(.system(size:10,weight:.bold))
+                        .foregroundStyle(directionColor)
+                    Text(subtitleText)
+                        .font(.caption)
+                        .foregroundStyle(copiedFeedback ? Color.accentColor : Color.secondary)
+                        .lineLimit(1)
                 }
             }
 
-            if let text = row.text {
-                Button { service.copy(text) } label: {
-                    Image(systemName:"doc.on.doc")
-                        .font(.subheadline)
-                        .frame(width:34,height:34)
-                        .background(Color.secondary.opacity(0.1),in:Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("复制文字")
-            } else if let url = existingFileURLs.first {
-                HStack(spacing:6) {
-                    Button { service.preview = url } label: {
-                        Image(systemName:"eye")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width:34,height:34)
-                            .background(Color.accentColor.opacity(0.1),in:Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("预览")
-
-                    ShareLink(item:url) {
-                        Image(systemName:"square.and.arrow.up")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width:34,height:34)
-                            .background(Color.accentColor.opacity(0.1),in:Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("share-received-file")
-
-                    #if os(macOS)
-                    Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
-                        Image(systemName:"folder")
-                            .font(.subheadline)
-                            .frame(width:34,height:34)
-                            .background(Color.secondary.opacity(0.1),in:Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("在访达显示")
-                    #endif
-                }
-            }
             if !row.finished && row.direction == "send" {
                 Button { service.command(["action":"cancel","id":row.id]) } label: {
                     Image(systemName:"xmark.circle.fill")
                         .foregroundStyle(.secondary)
-                        .frame(width:32,height:32)
+                        .frame(width:30,height:30)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("取消传输")
             }
         }
-        .padding(.vertical,6)
+        .padding(.vertical,2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            handleTap()
+        }
+        .contextMenu {
+            if let text = row.text {
+                Button {
+                    copyWithFeedback(text)
+                } label: {
+                    Label("复制文字",systemImage:"doc.on.doc")
+                }
+            } else if let url = existingFileURLs.first {
+                Button {
+                    service.preview = url
+                } label: {
+                    Label("预览",systemImage:"eye")
+                }
+                ShareLink(item:url) {
+                    Label("分享",systemImage:"square.and.arrow.up")
+                }
+                #if os(macOS)
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                } label: {
+                    Label("在访达显示",systemImage:"folder")
+                }
+                #endif
+            }
+        }
         .task(id:"\(row.id)-\(row.finished)-\(service.cacheItemCount)") {
             let candidates = row.fileURLs
             guard !candidates.isEmpty else {
@@ -483,6 +465,61 @@ struct TransferRowView: View {
             if !Task.isCancelled {
                 existingFileURLs = alive
                 checkedFiles = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var leadingThumbnail: some View {
+        ZStack(alignment:.bottomTrailing) {
+            if let firstURL = existingFileURLs.first {
+                FileThumbnail(url:firstURL)
+                    .frame(width:52,height:52)
+                    .background(Color.secondary.opacity(0.08),in:RoundedRectangle(cornerRadius:10))
+                    .clipShape(RoundedRectangle(cornerRadius:10))
+                    .overlay(RoundedRectangle(cornerRadius:10).stroke(.primary.opacity(0.06),lineWidth:0.5))
+            } else if row.text != nil {
+                Image(systemName:"text.bubble.fill")
+                    .font(.title3)
+                    .foregroundStyle(.purple)
+                    .frame(width:52,height:52)
+                    .background(Color.purple.opacity(0.11),in:RoundedRectangle(cornerRadius:10))
+            } else {
+                Image(systemName:row.fileURLs.isEmpty ? directionIcon : "photo")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width:52,height:52)
+                    .background(Color.secondary.opacity(0.1),in:RoundedRectangle(cornerRadius:10))
+            }
+
+            if existingFileURLs.count > 1 {
+                Text("\(existingFileURLs.count)")
+                    .font(.system(size:10,weight:.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal,5)
+                    .padding(.vertical,1.5)
+                    .background(.black.opacity(0.65),in:Capsule())
+                    .padding(3)
+            }
+        }
+    }
+
+    private func handleTap() {
+        if let text = row.text {
+            copyWithFeedback(text)
+        } else if let url = existingFileURLs.first {
+            service.preview = url
+        }
+    }
+
+    private func copyWithFeedback(_ text: String) {
+        service.copy(text)
+        withAnimation(.easeInOut(duration:0.15)) {
+            copiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline:.now()+1.5) {
+            withAnimation(.easeInOut(duration:0.2)) {
+                copiedFeedback = false
             }
         }
     }

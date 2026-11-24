@@ -35,7 +35,7 @@ struct FileStrip: View {
     }
 }
 
-private struct FileThumbnail: View {
+struct FileThumbnail: View {
     let url: URL
     @State private var thumbnail: CGImage?
     private var isImage: Bool { UTType(filenameExtension:url.pathExtension)?.conforms(to:.image) == true }

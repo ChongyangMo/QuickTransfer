@@ -14,7 +14,7 @@ def render(value):
 def plist(name, value):
     path = ROOT / name; path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(plistlib.dumps(value))
 
-base = {"CFBundleDisplayName":"快传","CFBundleName":"QuickTransfer","CFBundleExecutable":"$(EXECUTABLE_NAME)","CFBundleIdentifier":"$(PRODUCT_BUNDLE_IDENTIFIER)","CFBundlePackageType":"APPL","CFBundleShortVersionString":"0.1.0","CFBundleVersion":"1","NSLocalNetworkUsageDescription":"发现附近设备并直接传输照片和文字。","NSBonjourServices":["_quicktransfer._tcp."]}
+base = {"CFBundleDevelopmentRegion":"zh-Hans","CFBundleDisplayName":"快传","CFBundleLocalizations":["zh-Hans"],"CFBundleName":"QuickTransfer","CFBundleExecutable":"$(EXECUTABLE_NAME)","CFBundleIdentifier":"$(PRODUCT_BUNDLE_IDENTIFIER)","CFBundlePackageType":"APPL","CFBundleShortVersionString":"0.1.0","CFBundleVersion":"1","NSLocalNetworkUsageDescription":"发现附近设备并直接传输照片和文字。","NSBonjourServices":["_quicktransfer._tcp."]}
 plist("apple/Mac/Info.plist",dict(base,NSPrincipalClass="NSApplication",LSMinimumSystemVersion="14.0",NSHighResolutionCapable=True))
 plist("apple/iOS/Info.plist",dict(base,LSRequiresIPhoneOS=True,NSPhotoLibraryUsageDescription="访问相册以快速选择并直接发送原图照片。",UILaunchScreen={},UISupportedInterfaceOrientations=["UIInterfaceOrientationPortrait","UIInterfaceOrientationLandscapeLeft","UIInterfaceOrientationLandscapeRight"],UIApplicationSceneManifest={"UIApplicationSupportsMultipleScenes":False},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True))
 plist("apple/ShareHost/Info.plist",dict(base,CFBundleDisplayName="分享检查",LSRequiresIPhoneOS=True,UILaunchScreen={},UIApplicationSceneManifest={"UIApplicationSupportsMultipleScenes":False}))
