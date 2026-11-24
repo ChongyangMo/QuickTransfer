@@ -135,7 +135,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             await Task.Delay(3100, token);
             if (token.IsCancellationRequested) return;
-            PruneStalePeers();
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+                await dispatcher.InvokeAsync(PruneStalePeers);
+            else
+                PruneStalePeers();
         }
         catch (OperationCanceledException) { }
     }
@@ -200,7 +204,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await Task.Delay(delayMs, token);
-            if (!token.IsCancellationRequested) ToastText = "";
+            if (token.IsCancellationRequested) return;
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+                await dispatcher.InvokeAsync(() => { if (!token.IsCancellationRequested) ToastText = ""; });
+            else
+                ToastText = "";
         }
         catch (OperationCanceledException) { }
     }
