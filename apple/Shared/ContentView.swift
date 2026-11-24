@@ -12,74 +12,66 @@ struct ContentView: View {
     @ObservedObject var service: TransferService
     var shareMode = false
     @State private var importing = false
+    @State private var showTextComposer = false
+    @FocusState private var textFocused: Bool
     #if os(iOS)
     @State private var photos: [PhotosPickerItem] = []
     @State private var showFastPhotoPicker = false
     @State private var showSystemPhotoPicker = false
     #endif
+
+    private var hasPendingContent: Bool {
+        !service.text.isEmpty || !service.attachments.isEmpty || service.importingPhotos
+    }
+
     var body: some View {
         VStack(spacing:0) {
             if let error = service.error {
-                HStack(alignment:.top) {
+                HStack(alignment:.top,spacing:8) {
+                    Image(systemName:"exclamationmark.circle.fill").foregroundStyle(.red).padding(.top,2)
                     Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
                     Spacer(minLength:8)
-                    Button { service.error=nil } label: { Image(systemName:"xmark") }.buttonStyle(.plain).accessibilityLabel("关闭错误")
-                }.padding(12)
+                    Button { service.error=nil } label: { Image(systemName:"xmark").font(.caption.bold()).foregroundStyle(.secondary) }.buttonStyle(.plain).accessibilityLabel("关闭错误")
+                }
+                .padding(.horizontal,16)
+                .padding(.vertical,10)
+                .background(Color.red.opacity(0.08))
                 Divider()
             }
-            List {
-                if service.peers.isEmpty {
-                    HStack { Spacer(); Text(service.ready ? "未发现设备":"正在连接").foregroundStyle(.secondary); Spacer() }.padding(.vertical,24)
-                }
-                ForEach(service.peers) { peer in
-                    Button { service.selected=peer.id } label: {
-                        HStack(spacing:12) {
-                            Image(systemName:peer.mobile ? "iphone":"desktopcomputer").font(.title2).frame(width:30)
-                            Text(peer.alias).foregroundStyle(.primary).lineLimit(1)
-                            Spacer()
-                            if peer.trusted { Image(systemName:"lock.fill").font(.caption).foregroundStyle(.secondary).accessibilityLabel("已记住") }
-                            if service.selected==peer.id { Image(systemName:"checkmark.circle.fill").foregroundStyle(.tint) }
-                        }.frame(minHeight:38).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel(peer.alias).accessibilityAddTraits(service.selected==peer.id ? .isSelected:[])
-                }
-            }.listStyle(.plain).frame(minHeight:110,maxHeight:190)
+
+            deviceSection
+
             Divider()
-            VStack(alignment:.leading,spacing:12) {
-                TextField("输入文字",text:$service.text,axis:.vertical).lineLimit(2...5).textFieldStyle(.plain).accessibilityLabel("发送文字")
-                if !service.attachments.isEmpty {
-                    FileStrip(urls:service.attachments,service:service,removable:true)
-                }
-                if service.importingPhotos {
-                    HStack(spacing:8) {
-                        ProgressView().controlSize(.small)
-                        Text(service.pendingAutoSend ? "正在准备原图，完成后自动发送…" : "正在读取原图（剩余 \(max(1, service.importingPhotoCount)) 张）…")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                HStack(spacing:16) {
-                    Button { importing=true } label:{ Label("文件",systemImage:"paperclip") }.buttonStyle(.borderless)
-                    #if os(iOS)
-                    if !shareMode {
-                        Button { showFastPhotoPicker=true } label:{ Label("照片",systemImage:"photo") }.buttonStyle(.borderless)
-                        PasteButton(payloadType:String.self) { strings in service.text=strings.joined(separator:"\n") }.labelStyle(.iconOnly).accessibilityLabel("粘贴文字")
-                    }
-                    #else
-                    Button { service.paste() } label:{ Label("粘贴",systemImage:"doc.on.clipboard") }.buttonStyle(.borderless).keyboardShortcut("v",modifiers:.command)
-                    #endif
-                    Spacer(minLength:0)
-                    Button(service.pendingAutoSend ? "等待发送" : "发送") { service.send() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(!service.canSendToSelectedPeer || service.pendingAutoSend || (!service.importingPhotos && service.text.isEmpty && service.attachments.isEmpty))
-                        .keyboardShortcut(.return,modifiers:.command)
-                }
-            }.padding(16)
+
+            composerSection
+
             if !shareMode && !service.rows.isEmpty {
                 Divider()
-                List(service.rows) { row in TransferRowView(row:row,service:service) }.listStyle(.plain)
+                HStack {
+                    Text("传输记录")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(service.rows.count) 条")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal,16)
+                .padding(.top,10)
+                .padding(.bottom,4)
+
+                List(service.rows) { row in
+                    TransferRowView(row:row,service:service)
+                        .listRowInsets(EdgeInsets(top:4,leading:16,bottom:4,trailing:16))
+                }
+                .listStyle(.plain)
             } else if !service.rows.isEmpty {
-                ForEach(service.rows.filter{!$0.finished}.prefix(1)) { row in TransferRowView(row:row,service:service).padding(.horizontal) }
+                Divider()
+                ForEach(service.rows.filter{!$0.finished}.prefix(1)) { row in
+                    TransferRowView(row:row,service:service).padding(.horizontal,16)
+                }
+            } else {
+                Spacer(minLength:0)
             }
         }
         .navigationTitle("快传")
@@ -88,6 +80,14 @@ struct ContentView: View {
         #endif
         .toolbar {
             ToolbarItemGroup(placement:.primaryAction) {
+                Button { toggleTextComposer() } label: {
+                    Text("文")
+                        .font(.system(size:15,weight:.semibold))
+                        .foregroundStyle((showTextComposer || !service.text.isEmpty) ? Color.accentColor : Color.primary)
+                }
+                .help(showTextComposer ? "收起文字输入" : "输入文字")
+                .accessibilityLabel("输入文字")
+
                 Button { service.refresh() } label:{ Image(systemName:"arrow.clockwise") }.help("刷新设备").accessibilityLabel("刷新设备")
                 Button { service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
                 if !shareMode { Button { service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置") }
@@ -101,6 +101,14 @@ struct ContentView: View {
         .sheet(isPresented:$service.showAddress) { AddressView(service:service) }
         .quickLookPreview($service.preview)
         .onDrop(of:[UTType.fileURL,UTType.image],isTargeted:nil) { service.importDropped($0) }
+        .onAppear {
+            if !service.text.isEmpty { showTextComposer = true }
+        }
+        .onChange(of:service.text) { oldValue,value in
+            if oldValue.isEmpty && !value.isEmpty && !showTextComposer {
+                showTextComposer = true
+            }
+        }
         #if os(macOS)
         .frame(minWidth:370,minHeight:420)
         #else
@@ -122,34 +130,322 @@ struct ContentView: View {
         }
         #endif
     }
+
+    @ViewBuilder
+    private var deviceSection: some View {
+        if service.peers.isEmpty {
+            HStack(spacing:8) {
+                Spacer()
+                if !service.ready { ProgressView().controlSize(.small) }
+                Text(service.ready ? "未发现附近设备" : "正在连接…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.vertical,20)
+        } else {
+            let listContent = VStack(spacing:6) {
+                ForEach(service.peers) { peer in
+                    let isSelected = service.selected == peer.id
+                    Button { service.selected = peer.id } label: {
+                        HStack(spacing:12) {
+                            Image(systemName:peer.mobile ? "iphone":"desktopcomputer")
+                                .font(.title3)
+                                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                                .frame(width:28)
+                            Text(peer.alias)
+                                .font(.body.weight(isSelected ? .medium : .regular))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer()
+                            if peer.trusted {
+                                Image(systemName:"lock.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel("已记住")
+                            }
+                            if isSelected {
+                                Image(systemName:"checkmark.circle.fill")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .padding(.horizontal,12)
+                        .padding(.vertical,10)
+                        .background(
+                            RoundedRectangle(cornerRadius:12)
+                                .fill(isSelected ? Color.accentColor.opacity(0.11) : Color.secondary.opacity(0.06))
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius:12))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(peer.alias)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal,14)
+            .padding(.vertical,10)
+
+            if service.peers.count > 3 {
+                ScrollView { listContent }
+                    .frame(maxHeight:184)
+            } else {
+                listContent
+            }
+        }
+    }
+
+    private var composerSection: some View {
+        VStack(alignment:.leading,spacing:10) {
+            if showTextComposer {
+                VStack(alignment:.leading,spacing:8) {
+                    TextField("输入要发送的文字…",text:$service.text,axis:.vertical)
+                        .lineLimit(2...5)
+                        .textFieldStyle(.plain)
+                        .focused($textFocused)
+                        .accessibilityLabel("发送文字")
+                    HStack(spacing:10) {
+                        #if os(iOS)
+                        PasteButton(payloadType:String.self) { strings in
+                            let pasted = strings.joined(separator:"\n")
+                            if !pasted.isEmpty { service.text = pasted }
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        #else
+                        Button { service.paste() } label: {
+                            Label("粘贴",systemImage:"doc.on.clipboard")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .keyboardShortcut("v",modifiers:.command)
+                        #endif
+                        if !service.text.isEmpty {
+                            Button("清空") { service.text = "" }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .buttonStyle(.plain)
+                        }
+                        Spacer()
+                        Button {
+                            withAnimation(.easeInOut(duration:0.18)) {
+                                textFocused = false
+                                showTextComposer = false
+                            }
+                        } label: {
+                            Text("收起")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
+                .transition(.opacity.combined(with:.move(edge:.top)))
+            }
+
+            if !service.attachments.isEmpty {
+                FileStrip(urls:service.attachments,service:service,removable:true)
+            }
+
+            if service.importingPhotos {
+                HStack(spacing:8) {
+                    ProgressView().controlSize(.small)
+                    Text(service.pendingAutoSend ? "正在准备原图，完成后自动发送…" : "正在读取原图（剩余 \(max(1, service.importingPhotoCount)) 张）…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing:10) {
+                #if os(iOS)
+                if !shareMode {
+                    Button { showFastPhotoPicker = true } label: {
+                        Label("照片",systemImage:"photo.fill")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal,14)
+                            .padding(.vertical,9)
+                            .background(Color.accentColor.opacity(0.13),in:Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                #endif
+
+                Button { importing = true } label: {
+                    Label("文件",systemImage:"paperclip")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal,14)
+                        .padding(.vertical,9)
+                        .background(Color.secondary.opacity(0.12),in:Capsule())
+                }
+                .buttonStyle(.plain)
+
+                #if os(macOS)
+                Button { service.paste() } label: {
+                    Label("粘贴",systemImage:"doc.on.clipboard")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal,12)
+                        .padding(.vertical,9)
+                        .background(Color.secondary.opacity(0.12),in:Capsule())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("v",modifiers:.command)
+                #endif
+
+                Spacer(minLength:0)
+
+                if hasPendingContent || showTextComposer {
+                    Button(service.pendingAutoSend ? "等待发送" : "发送") {
+                        textFocused = false
+                        service.send()
+                        if service.text.isEmpty { showTextComposer = false }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.regular)
+                    .disabled(!service.canSendToSelectedPeer || service.pendingAutoSend || (!service.importingPhotos && service.text.isEmpty && service.attachments.isEmpty))
+                    .keyboardShortcut(.return,modifiers:.command)
+                }
+            }
+        }
+        .padding(.horizontal,14)
+        .padding(.vertical,12)
+        .animation(.easeInOut(duration:0.18),value:showTextComposer)
+    }
+
+    private func toggleTextComposer() {
+        withAnimation(.easeInOut(duration:0.18)) {
+            if showTextComposer {
+                textFocused = false
+                showTextComposer = false
+            } else {
+                showTextComposer = true
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.1) {
+                    textFocused = true
+                }
+            }
+        }
+    }
 }
 
 struct TransferRowView: View {
     let row: TransferRow
     @ObservedObject var service: TransferService
+
+    private var existingFileURLs: [URL] {
+        row.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    private var iconName: String {
+        if row.text != nil { return "text.bubble.fill" }
+        return row.direction == "send" ? "arrow.up.right" : "arrow.down.left"
+    }
+
+    private var iconColor: Color {
+        if row.text != nil { return .purple }
+        return row.direction == "send" ? .accentColor : .green
+    }
+
+    private var subtitleText: String {
+        var parts = [row.state]
+        if row.size > 0 {
+            parts.append(ByteCountFormatter.string(fromByteCount:row.size,countStyle:.file))
+        }
+        if row.text == nil && !row.fileURLs.isEmpty && existingFileURLs.isEmpty && row.finished {
+            parts.append("缓存已清理")
+        }
+        return parts.joined(separator:" · ")
+    }
+
     var body: some View {
         HStack(alignment:.top,spacing:10) {
-            Image(systemName:row.text != nil ? "text.bubble":row.direction=="send" ? "arrow.up.right":"arrow.down.left").foregroundStyle(.secondary).padding(.top,3)
+            Image(systemName:iconName)
+                .font(.caption.bold())
+                .foregroundStyle(iconColor)
+                .frame(width:28,height:28)
+                .background(iconColor.opacity(0.12),in:Circle())
+                .padding(.top,2)
+
             VStack(alignment:.leading,spacing:5) {
-                Text(row.text ?? row.name).lineLimit(row.text != nil ? 4:1).textSelection(.enabled)
+                HStack(alignment:.firstTextBaseline,spacing:6) {
+                    Text(row.text ?? row.name)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(row.text != nil ? 4 : 1)
+                        .textSelection(.enabled)
+                    Spacer(minLength:4)
+                    Text(row.started,style:.time)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 if !row.finished { ProgressView(value:row.progress) }
-                Text(row.state).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                if !row.fileURLs.isEmpty { FileStrip(urls:row.fileURLs,service:service) }
+                Text(subtitleText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if !existingFileURLs.isEmpty {
+                    FileStrip(urls:existingFileURLs,service:service)
+                        .padding(.top,2)
+                }
             }
-            Spacer(minLength:6)
-            if let text=row.text {
-                Button { service.copy(text) } label:{ Image(systemName:"doc.on.doc").frame(minWidth:44,minHeight:44) }.buttonStyle(.borderless).accessibilityLabel("复制文字")
-            } else if let url=row.fileURLs.first {
-                Button { service.preview=url } label:{ Image(systemName:"eye").frame(minWidth:44,minHeight:44) }.buttonStyle(.borderless).accessibilityLabel("预览")
-                ShareLink(item:url) { Image(systemName:"square.and.arrow.up").frame(minWidth:44,minHeight:44) }.buttonStyle(.borderless).accessibilityIdentifier("share-received-file")
-                #if os(macOS)
-                Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label:{ Image(systemName:"folder") }.buttonStyle(.borderless).accessibilityLabel("在访达显示")
-                #endif
+
+            if let text = row.text {
+                Button { service.copy(text) } label: {
+                    Image(systemName:"doc.on.doc")
+                        .font(.subheadline)
+                        .frame(width:34,height:34)
+                        .background(Color.secondary.opacity(0.1),in:Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("复制文字")
+            } else if let url = existingFileURLs.first {
+                HStack(spacing:6) {
+                    Button { service.preview = url } label: {
+                        Image(systemName:"eye")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width:34,height:34)
+                            .background(Color.accentColor.opacity(0.1),in:Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("预览")
+
+                    ShareLink(item:url) {
+                        Image(systemName:"square.and.arrow.up")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width:34,height:34)
+                            .background(Color.accentColor.opacity(0.1),in:Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("share-received-file")
+
+                    #if os(macOS)
+                    Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
+                        Image(systemName:"folder")
+                            .font(.subheadline)
+                            .frame(width:34,height:34)
+                            .background(Color.secondary.opacity(0.1),in:Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("在访达显示")
+                    #endif
+                }
             }
-            if !row.finished && row.direction=="send" {
-                Button { service.command(["action":"cancel","id":row.id]) } label:{ Image(systemName:"xmark.circle") }.buttonStyle(.borderless).accessibilityLabel("取消传输")
+            if !row.finished && row.direction == "send" {
+                Button { service.command(["action":"cancel","id":row.id]) } label: {
+                    Image(systemName:"xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width:32,height:32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("取消传输")
             }
-        }.padding(.vertical,6)
+        }
+        .padding(.vertical,6)
     }
 }
 

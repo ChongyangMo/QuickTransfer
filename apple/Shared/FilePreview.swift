@@ -12,10 +12,11 @@ struct FileStrip: View {
                 ForEach(Array(urls.enumerated()),id:\.offset) { _,url in
                     Button { service.preview=url } label: {
                         FileThumbnail(url:url)
-                            .frame(width:104,height:80)
-                            .padding(4)
-                            .background(.quaternary,in:RoundedRectangle(cornerRadius:8))
-                            .contentShape(RoundedRectangle(cornerRadius:8))
+                            .frame(width:76,height:76)
+                            .background(.quaternary.opacity(0.6),in:RoundedRectangle(cornerRadius:10))
+                            .clipShape(RoundedRectangle(cornerRadius:10))
+                            .overlay(RoundedRectangle(cornerRadius:10).stroke(.primary.opacity(0.06),lineWidth:0.5))
+                            .contentShape(RoundedRectangle(cornerRadius:10))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("预览 \(url.lastPathComponent)")
@@ -24,13 +25,13 @@ struct FileStrip: View {
                     .overlay(alignment:.topTrailing) {
                         if removable {
                             Button { service.removeAttachment(url) } label:{
-                                Image(systemName:"xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white,.black.opacity(0.65)).frame(width:32,height:32)
+                                Image(systemName:"xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white,.black.opacity(0.65)).frame(width:28,height:28)
                             }.buttonStyle(.plain).accessibilityLabel("移除 \(url.lastPathComponent)")
                         }
                     }
                 }
-            }.frame(height:92)
-        }.scrollIndicators(.hidden).frame(height:92)
+            }.frame(height:80)
+        }.scrollIndicators(.hidden).frame(height:80)
     }
 }
 
@@ -40,9 +41,19 @@ private struct FileThumbnail: View {
     private var isImage: Bool { UTType(filenameExtension:url.pathExtension)?.conforms(to:.image) == true }
     var body: some View {
         Group {
-            if let thumbnail { Image(decorative:thumbnail,scale:1).resizable().scaledToFit() }
-            else if isImage { Image(systemName:"photo").font(.title2).foregroundStyle(.secondary) }
-            else { Label(url.lastPathComponent,systemImage:"doc").font(.caption).lineLimit(3) }
+            if let thumbnail {
+                Image(decorative:thumbnail,scale:1)
+                    .resizable()
+                    .scaledToFill()
+            } else if isImage {
+                Image(systemName:"photo").font(.title3).foregroundStyle(.secondary)
+            } else {
+                VStack(spacing:4) {
+                    Image(systemName:"doc.fill").font(.title3).foregroundStyle(.secondary)
+                    Text(url.lastPathComponent).font(.caption2).foregroundStyle(.secondary).lineLimit(2).multilineTextAlignment(.center)
+                }
+                .padding(6)
+            }
         }
         .task(id:url) {
             thumbnail=nil
