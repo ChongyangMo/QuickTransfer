@@ -161,13 +161,13 @@ final class Haptics {
             ]
             delay = 0.24
 
-        // 清脆上扬双震：发送成功、复制成功、清理完成
+        // 叮咚轻重双震：第一下轻脆高音“叮”，第二下厚重落地“咚”
         case .complete:
             events = [
-                transient(time: 0, intensity: 0.68, sharpness: 0.92),
-                transient(time: 0.085, intensity: 0.94, sharpness: 0.95),
+                transient(time: 0, intensity: 0.56, sharpness: 0.96),
+                transient(time: 0.11, intensity: 0.98, sharpness: 0.30),
             ]
-            delay = 0.32
+            delay = 0.36
 
         // 沉稳警示双震：删除记录、移除附件、立即清理、拒绝、取消传输
         case .warning:

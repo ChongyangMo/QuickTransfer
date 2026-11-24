@@ -112,10 +112,17 @@ struct ContentView: View {
             } else if !shareMode {
                 ScrollView {
                     VStack(spacing:6) {
+                        #if os(iOS)
                         Text("下拉刷新附近设备")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .padding(.top,32)
+                        #else
+                        Text("暂无传输记录")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top,32)
+                        #endif
                     }
                     .frame(maxWidth:.infinity)
                 }
@@ -136,6 +143,15 @@ struct ContentView: View {
                 }
                 .help(showTextComposer ? "收起文字输入" : "输入文字")
                 .accessibilityLabel("输入文字")
+
+                #if os(macOS)
+                Button { service.refresh() } label: {
+                    Image(systemName:"arrow.clockwise")
+                }
+                .help("刷新设备")
+                .accessibilityLabel("刷新设备")
+                .keyboardShortcut("r",modifiers:.command)
+                #endif
 
                 if shareMode {
                     Button { Haptics.shared.play(.expand); service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
@@ -230,9 +246,15 @@ struct ContentView: View {
                 HStack(spacing:8) {
                     Spacer()
                     if !service.ready { ProgressView().controlSize(.small) }
+                    #if os(iOS)
                     Text(service.ready ? "未发现附近设备，下拉刷新" : "正在连接…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    #else
+                    Text(service.ready ? "未发现附近设备" : "正在连接…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    #endif
                     Spacer()
                 }
                 .padding(.vertical,20)
@@ -302,10 +324,12 @@ struct ContentView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance:28)
                 .onEnded { value in
+                    #if os(iOS)
                     guard !isPullRefreshingHeader,
                           value.translation.height > 44,
                           abs(value.translation.height) > abs(value.translation.width) * 1.4 else { return }
                     triggerHeaderPullRefresh()
+                    #endif
                 }
         )
         .animation(.snappy(duration:0.22),value:isPullRefreshingHeader)
@@ -812,6 +836,7 @@ struct SettingsView:View {
                     }
                 }
             }
+            .formStyle(.grouped)
             .navigationDestination(isPresented:$showManualAdd) {
                 AddressView(service:service,onConnected:{ dismiss() })
             }
@@ -917,6 +942,7 @@ struct AddressView:View {
                 .disabled(trimmedHost.isEmpty)
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("手动添加设备")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
