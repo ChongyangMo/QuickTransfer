@@ -78,6 +78,29 @@ public partial class MainWindow
         return selected.Contains(file.Path, StringComparer.OrdinalIgnoreCase) ? selected : new[] { file.Path };
     }
 
+    public Attachment[] GalleryActionTargets(Attachment file)
+    {
+        var selected = GalleryList.SelectedItems.OfType<GalleryItem>().Select(item => item.File).ToArray();
+        return selected.Any(item => string.Equals(item.Path, file.Path, StringComparison.OrdinalIgnoreCase))
+            ? selected : new[] { file };
+    }
+
+    private async void ResendGallerySelection(object sender, RoutedEventArgs args)
+    {
+        var items = GalleryList.SelectedItems.OfType<GalleryItem>().Select(item => item.File).ToArray();
+        if (items.Length == 0) return;
+        await Model.ResendFilesAsync(items);
+        ClearGallerySelection();
+    }
+
+    private async void RemoveGallerySelection(object sender, RoutedEventArgs args)
+    {
+        var items = GalleryList.SelectedItems.OfType<GalleryItem>().Select(item => item.File).ToArray();
+        if (items.Length == 0) return;
+        await Model.RemoveGalleryItemsAsync(items);
+        ClearGallerySelection();
+    }
+
     private void CopyGallerySelection(object sender, RoutedEventArgs args)
     {
         Model.Run(() =>
@@ -90,6 +113,7 @@ public partial class MainWindow
             files.AddRange(paths);
             Clipboard.SetFileDropList(files);
             Model.Status = "";
+            Model.ShowToast(paths.Length == 1 ? "已复制文件" : $"已复制 {paths.Length} 个文件");
         });
     }
 

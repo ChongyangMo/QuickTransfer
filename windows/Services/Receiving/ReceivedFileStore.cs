@@ -13,7 +13,9 @@ public sealed class ReceivedFileStore(string root)
 {
     private readonly SemaphoreSlim gate = new(1);
     private readonly string historyPath = Path.Combine(root, "received-files.json");
+    private readonly string dismissedPath = Path.Combine(root, "dismissed-files.json");
     private List<ReceivedFileEntry>? history;
+    private HashSet<string>? dismissed;
 
     public async Task<string> StoreAsync(string source, string directory, string batchId, DateTimeOffset startedAt)
     {
@@ -63,6 +65,7 @@ public sealed class ReceivedFileStore(string root)
             return await Task.Run(() =>
             {
                 LoadHistory();
+                LoadDismissed();
                 var entries = history!.Where(entry => File.Exists(entry.Path)).ToList();
                 var legacy = Path.Combine(root, "received");
                 if (Directory.Exists(legacy))
@@ -71,6 +74,7 @@ public sealed class ReceivedFileStore(string root)
                         { RecurseSubdirectories = true, IgnoreInaccessible = true }))
                     {
                         if (file.Extension.Equals(".part", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (dismissed!.Contains(Path.GetFullPath(file.FullName))) continue;
                         var batch = Path.GetRelativePath(legacy, file.FullName).Split(Path.DirectorySeparatorChar)[0];
                         var batchDirectory = Path.Combine(legacy, batch);
                         entries.Add(new ReceivedFileEntry(file.FullName, batch,
@@ -84,14 +88,63 @@ public sealed class ReceivedFileStore(string root)
         finally { gate.Release(); }
     }
 
+    public async Task RemoveAsync(IEnumerable<string> paths)
+    {
+        var targets = new HashSet<string>(paths.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
+        if (targets.Count == 0) return;
+        await gate.WaitAsync();
+        try
+        {
+            await Task.Run(() =>
+            {
+                LoadHistory();
+                LoadDismissed();
+                var removed = history!.RemoveAll(entry => targets.Contains(Path.GetFullPath(entry.Path)));
+                if (removed > 0) SaveHistory();
+                var legacyRoot = Path.GetFullPath(Path.Combine(root, "received"));
+                var dismissedChanged = false;
+                foreach (var target in targets)
+                {
+                    if (target.StartsWith(legacyRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+                        dismissed!.Add(target))
+                    {
+                        dismissedChanged = true;
+                    }
+                }
+                if (dismissedChanged) SaveDismissed();
+            });
+        }
+        finally { gate.Release(); }
+    }
+
     private void LoadHistory() => history ??= File.Exists(historyPath)
         ? JsonSerializer.Deserialize<List<ReceivedFileEntry>>(File.ReadAllText(historyPath)) ?? new()
         : new();
+
+    private void LoadDismissed()
+    {
+        if (dismissed != null) return;
+        try
+        {
+            var list = File.Exists(dismissedPath)
+                ? JsonSerializer.Deserialize<List<string>>(File.ReadAllText(dismissedPath)) ?? new()
+                : new();
+            dismissed = new HashSet<string>(list.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
+        }
+        catch { dismissed = new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
+    }
 
     private void SaveHistory()
     {
         var temporary = historyPath + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(history));
         File.Move(temporary, historyPath, true);
+    }
+
+    private void SaveDismissed()
+    {
+        var temporary = dismissedPath + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(dismissed!.ToArray()));
+        File.Move(temporary, dismissedPath, true);
     }
 }

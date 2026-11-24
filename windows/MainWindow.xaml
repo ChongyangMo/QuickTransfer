@@ -18,38 +18,63 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Menu Background="Transparent" Foreground="{DynamicResource TextBrush}" Padding="4,2">
-        <MenuItem Header="文件">
-          <MenuItem Header="选择文件" InputGestureText="Ctrl+O" Click="PickFiles" />
-          <MenuItem Header="粘贴" InputGestureText="Ctrl+V" Click="Paste" />
-          <Separator />
-          <MenuItem Header="退出" Click="Exit" />
-        </MenuItem>
-        <MenuItem Header="文字" Click="OpenTextEditor" AutomationProperties.Name="文字" />
-        <MenuItem Header="显示">
-          <MenuItem Header="按时间分组" IsCheckable="True" IsChecked="{Binding GroupGalleryByTime, Mode=TwoWay}"
-                    AutomationProperties.Name="按时间分组" />
-        </MenuItem>
-        <MenuItem Header="设备">
-          <MenuItem Header="刷新设备" Command="{Binding RefreshCommand}" />
-          <MenuItem Header="添加设备" Click="AddPeer" />
-        </MenuItem>
-        <MenuItem Header="设置" Click="OpenSettings" />
-      </Menu>
-    </Border>
-    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,6">
+    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8">
       <Grid>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-        <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
-                  SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center"
-                    Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
-          <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-          <Button Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" AutomationProperties.Name="{Binding SelectAllLabel}" />
-          <Button Style="{StaticResource FlatSendButton}" Content="取消选择" Click="CancelGallerySelection" Margin="8,0,0,0" AutomationProperties.Name="取消选择" />
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid VerticalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" MaxWidth="240" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ComboBox x:Name="DevicePicker" Style="{StaticResource DeviceSelector}" ItemsSource="{Binding Devices}"
+                    SelectedItem="{Binding SelectedDevice}" AutomationProperties.Name="在线设备" />
+          <Button Grid.Column="1" Style="{StaticResource HeaderIconButton}" Margin="6,0,0,0" Command="{Binding RefreshCommand}"
+                  ToolTip="刷新设备 (Ctrl+R)" AutomationProperties.Name="刷新设备">
+            <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13.5" />
+          </Button>
+        </Grid>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
+          <Button Style="{StaticResource HeaderPillButton}" Click="PickFiles"
+                  ToolTip="选择文件 (Ctrl+O)" AutomationProperties.Name="选择文件">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="&#xE723;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center" />
+              <TextBlock Text="文件" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource HeaderIconButton}" Margin="6,0,0,0" Click="OpenTextEditor"
+                  ToolTip="发送文字 (Ctrl+T)" AutomationProperties.Name="文字">
+            <TextBlock Text="文" FontSize="13.5" FontWeight="SemiBold" />
+          </Button>
+          <Button Style="{StaticResource HeaderIconButton}" Margin="6,0,0,0" Click="OpenSettings"
+                  ToolTip="设置 (Ctrl+,)" AutomationProperties.Name="设置">
+            <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14.5" />
+          </Button>
         </StackPanel>
       </Grid>
+    </Border>
+    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,4"
+            Background="{DynamicResource CardBrush}"
+            Visibility="{Binding IsSelecting, Converter={StaticResource BoolVisibility}}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Style="{StaticResource FlatSendButton}" Content="复制" Click="CopyGallerySelection"
+                  IsEnabled="{Binding HasGallerySelection}" ToolTip="Ctrl + C" AutomationProperties.Name="复制选中文件" />
+          <Button Style="{StaticResource FlatSendButton}" Content="重发" Click="ResendGallerySelection" Margin="4,0,0,0"
+                  IsEnabled="{Binding HasGallerySelection}" AutomationProperties.Name="重新发送选中文件" />
+          <Button Style="{StaticResource FlatSendButton}" Content="移除" Click="RemoveGallerySelection" Margin="4,0,0,0"
+                  IsEnabled="{Binding HasGallerySelection}" Foreground="{DynamicResource DangerBrush}" AutomationProperties.Name="移除选中记录" />
+          <Button Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" Margin="4,0,0,0"
+                  AutomationProperties.Name="{Binding SelectAllLabel}" />
+          <Button Style="{StaticResource FlatSendButton}" Content="取消" Click="CancelGallerySelection" Margin="4,0,0,0"
+                  Foreground="{DynamicResource MutedBrush}" AutomationProperties.Name="取消选择" />
+        </StackPanel>
+        <TextBlock Text="{Binding SelectedGalleryCount, StringFormat=已选 {0} 项}" Foreground="{DynamicResource MutedBrush}"
+                   VerticalAlignment="Center" FontSize="12.5" />
+      </DockPanel>
     </Border>
     <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8"
             Visibility="{Binding HasActiveTransfers, Converter={StaticResource BoolVisibility}}">
@@ -105,6 +130,44 @@
     <Border Grid.Row="5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="14,8"
             Visibility="{Binding HasStatus, Converter={StaticResource BoolVisibility}}">
       <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="{DynamicResource DangerBrush}" />
+    </Border>
+    <Border Grid.RowSpan="6" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="16,0,16,18"
+            Panel.ZIndex="100" CornerRadius="18" Padding="14,8" Cursor="Hand"
+            Background="{DynamicResource ToastBgBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1"
+            Visibility="{Binding HasToast, Converter={StaticResource BoolVisibility}}"
+            MouseLeftButtonUp="DismissToast">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.22" />
+      </Border.Effect>
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Border Width="18" Height="18" CornerRadius="9" Margin="0,0,8,0" VerticalAlignment="Center">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding ToastSuccess}" Value="False">
+                  <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+          <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                     HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Text" Value="&#xE73E;" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ToastSuccess}" Value="False">
+                    <Setter Property="Text" Value="&#xE711;" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </Border>
+        <TextBlock Text="{Binding ToastText}" FontSize="12.5" FontWeight="Medium" Foreground="{DynamicResource TextBrush}"
+                   MaxWidth="360" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+      </StackPanel>
     </Border>
   </Grid>
 </Window>

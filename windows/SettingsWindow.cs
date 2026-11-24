@@ -1,7 +1,6 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows;
-using QuickTransfer.Models;
-using QuickTransfer.Services;
 using QuickTransfer.Views;
 
 namespace QuickTransfer;
@@ -10,30 +9,27 @@ public partial class MainWindow
 {
     private async void OpenSettings(object sender, RoutedEventArgs args)
     {
-        if (Model.IsTransferring) { Model.Status = "请等待传输结束后再修改设置"; return; }
-        var dialog = new PromptWindow(this, "设置", "保存");
-        var alias = dialog.AddField("设备名称", Model.Settings.Alias);
-        var port = dialog.AddField("端口", Model.Settings.Port.ToString());
-        var directory = dialog.AddFolderField("保存目录", Model.Settings.ReceiveDirectory);
-        var heicFormat = dialog.AddSelect("接收 HEIC", new[] { "保留原格式", "转为 JPG", "转为 PNG" }, (int)Model.Settings.HeicReceiveFormat);
-        dialog.Validate = () =>
-        {
-            if (string.IsNullOrWhiteSpace(alias.Text) || !ValidPort(port.Text)) return "请输入设备名称和有效端口";
-            try { ReceiveDirectories.EnsureWritable(directory.Text); return ""; }
-            catch (Exception error) { return "保存目录不可用：" + error.Message; }
-        };
+        if (Model.IsTransferring) { Model.ShowToast("请等待传输结束后再修改设置", false); return; }
+        var dialog = new SettingsDialog(this);
         if (dialog.ShowDialog() != true) return;
-        if (Model.IsTransferring) { Model.Status = "请等待传输结束后再修改设置"; return; }
+        if (Model.IsTransferring) { Model.ShowToast("请等待传输结束后再修改设置", false); return; }
         try
         {
-            var name = alias.Text;
-            var number = int.Parse(port.Text);
-            var format = (HeicReceiveFormat)heicFormat.SelectedIndex;
-            var destination = directory.Text;
-            var restart = name.Trim() != Model.Settings.Alias || number != Model.Settings.Port;
-            await System.Threading.Tasks.Task.Run(() => Model.Settings.Save(name, number, format, destination));
+            var name = dialog.DeviceAlias;
+            var port = Model.Settings.Port;
+            var format = dialog.HeicReceiveFormat;
+            var destination = dialog.ReceiveDirectory;
+            var groupByTime = dialog.GroupGalleryByTime;
+            var retentionDays = dialog.CacheRetentionDays;
+            var restart = name.Trim() != Model.Settings.Alias;
+            var groupingChanged = groupByTime != Model.Settings.GroupGalleryByTime;
+            var retentionChanged = retentionDays != Model.Settings.CacheRetentionDays;
+            await Task.Run(() => Model.Settings.Save(name, port, format, destination, groupByTime, retentionDays));
             Model.Status = "";
+            if (groupingChanged) Model.NotifyGalleryGroupingChanged();
+            if (retentionChanged) _ = Model.CleanExpiredOutboxAsync();
             if (restart) Model.Restart();
+            Model.ShowToast("设置已保存");
         }
         catch (Exception error) { Model.Report(error); }
     }

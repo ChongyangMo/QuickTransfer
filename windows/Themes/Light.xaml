@@ -23,6 +23,9 @@
     <SolidColorBrush x:Key="RowHoverBrush" Color="#F3F6FB" />
     <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C9CED6" />
     <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#9CA3AF" />
+    <SolidColorBrush x:Key="ToastBgBrush" Color="#F7FFFFFF" />
+    <SolidColorBrush x:Key="PinBrush" Color="#D97706" />
+    <SolidColorBrush x:Key="SliderTrackBrush" Color="#D8DEE8" />
 
     <!-- 执行日志 -->
     <SolidColorBrush x:Key="LogBgBrush" Color="#F8FAFC" />

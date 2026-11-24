@@ -16,6 +16,7 @@ public sealed partial class MainViewModel
                 if (Records.Any(record => record.Files.Any(item => string.Equals(item.Path, entry.Path, StringComparison.OrdinalIgnoreCase)))) continue;
                 if (Records.Count >= 30) break;
                 var file = (await FileService.ReadFilesAsync(new[] { entry.Path }))[0];
+                file.IsPinned = IsPinnedPath(file.Path);
                 var record = new TransferRecord(file.Path, file.Name, 0)
                 {
                     State = "已接收", Active = false, BatchId = entry.BatchId, StartedAt = entry.StartedAt
@@ -25,6 +26,7 @@ public sealed partial class MainViewModel
                 Records.Add(record);
                 PublishFiles(record, false);
             }
+            _ = CleanExpiredOutboxAsync();
         }
         catch (Exception error) { Report(error); }
     }

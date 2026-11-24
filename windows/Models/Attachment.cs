@@ -12,8 +12,10 @@ public sealed class Attachment(string path, long size, double aspectRatio = 1, b
     public bool IsImage { get; } = isImage;
     public double AspectRatio { get; } = Math.Clamp(aspectRatio, .64, 1.8);
     private ImageSource? thumbnail;
+    private bool isPinned;
     public ImageSource? Thumbnail { get => thumbnail; set { if (Set(ref thumbnail, value)) Notify(nameof(HasThumbnail)); } }
     public bool HasThumbnail => Thumbnail != null;
+    public bool IsPinned { get => isPinned; set => Set(ref isPinned, value); }
     internal bool ThumbnailRequested { get; set; }
     public override string ToString() => Name;
 

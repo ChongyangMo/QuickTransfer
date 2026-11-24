@@ -37,9 +37,16 @@ public sealed partial class MainViewModel
                 ReconcileDevices(value.GetProperty("devices"));
                 break;
             case "offline":
+                lastLivePeerIds.Remove(id);
                 var offline = Devices.FirstOrDefault(peer => peer.Id == id);
                 if (offline != null) Devices.Remove(offline);
-                if (SelectedDevice?.Id == id) SelectedDevice = null;
+                if (SelectedDevice?.Id == id)
+                {
+                    suppressPeerSave = true;
+                    try { SelectedDevice = null; }
+                    finally { suppressPeerSave = false; }
+                    SelectPreferredDevice();
+                }
                 break;
             case "incoming": Incoming?.Invoke(value); break;
             case "dismiss": DismissIncoming?.Invoke(id); break;
@@ -60,12 +67,19 @@ public sealed partial class MainViewModel
                 break;
             case "sent":
             case "received":
-                if (id == activeSendId)
+                var wasActiveSend = id == activeSendId;
+                if (wasActiveSend)
                 {
                     sending = false;
                     if (Text == sentText && Attachments.Select(file => file.Path).SequenceEqual(sentFiles))
                     { Text = ""; Attachments.Clear(); }
                     UpdateCommands();
+                }
+                if (type == "sent")
+                {
+                    Status = "";
+                    var peerAlias = wasActiveSend && sentPeerAlias.Length > 0 ? sentPeerAlias : SelectedDevice?.Alias ?? "";
+                    ShowToast(peerAlias.Length > 0 ? $"已发送至 {peerAlias}" : "已发送", true);
                 }
                 if (record != null)
                 {
@@ -89,7 +103,9 @@ public sealed partial class MainViewModel
             case "cancelled":
                 if (id == activeSendId || (type == "error" && id.Length == 0 && sending && !rows.ContainsKey(activeSendId)))
                 { sending = false; UpdateCommands(); }
-                Status = String(value, "message", "传输已取消");
+                var failureMessage = String(value, "message", "传输已取消");
+                ShowToast(failureMessage, false);
+                if (!ready) Status = failureMessage;
                 if (record != null) { record.Active = false; ActiveTransfers.Remove(record); record.State = type == "cancelled" ? "已取消" : "传输失败"; }
                 break;
         }
@@ -98,7 +114,8 @@ public sealed partial class MainViewModel
 
     private void ReconcileDevices(JsonElement peers)
     {
-        var ids = new HashSet<string>();
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var liveSnapshot = new List<Services.CachedPeer>();
         foreach (var value in peers.EnumerateArray())
         {
             var id = String(value, "id");
@@ -107,10 +124,23 @@ public sealed partial class MainViewModel
             if (peer == null) { peer = new Peer(id); Devices.Add(peer); }
             peer.Alias = String(value, "alias");
             peer.Mobile = value.TryGetProperty("mobile", out var mobile) && mobile.ValueKind == JsonValueKind.True;
+            liveSnapshot.Add(new Services.CachedPeer(peer.Id, peer.Alias, peer.Mobile));
         }
-        foreach (var peer in Devices.Where(peer => !ids.Contains(peer.Id)).ToArray()) Devices.Remove(peer);
-        if (SelectedDevice != null && !Devices.Contains(SelectedDevice)) SelectedDevice = null;
-        if (SelectedDevice == null && Devices.Count == 1) SelectedDevice = Devices[0];
+        lastLivePeerIds.Clear();
+        foreach (var id in ids) lastLivePeerIds.Add(id);
+        if (DateTimeOffset.UtcNow >= reconnectGraceUntil)
+        {
+            foreach (var peer in Devices.Where(peer => !ids.Contains(peer.Id)).ToArray()) Devices.Remove(peer);
+            if (SelectedDevice != null && !Devices.Contains(SelectedDevice))
+            {
+                suppressPeerSave = true;
+                try { SelectedDevice = null; }
+                finally { suppressPeerSave = false; }
+            }
+        }
+        SelectPreferredDevice();
+        if (liveSnapshot.Count > 0)
+            _ = Task.Run(() => Settings.SaveRecentPeers(liveSnapshot));
         SendCommand.Refresh();
     }
 
@@ -122,7 +152,7 @@ public sealed partial class MainViewModel
         if (record.Active) ActiveTransfers.Add(record);
         while (Records.Count > 30)
         {
-            var last = Records.LastOrDefault(item => !item.Active);
+            var last = Records.LastOrDefault(item => !item.Active && !item.Files.Any(file => file.IsPinned));
             if (last == null) break;
             Records.Remove(last);
             rows.Remove(last.Id);
@@ -137,6 +167,7 @@ public sealed partial class MainViewModel
         {
             foreach (var file in await FileService.ReadFilesAsync(paths))
             {
+                file.IsPinned = IsPinnedPath(file.Path);
                 record.Files.Add(file);
             }
             record.FilesChanged();

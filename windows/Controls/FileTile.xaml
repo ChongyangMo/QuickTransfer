@@ -4,31 +4,39 @@
              x:Name="Tile" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
              PreviewMouseRightButtonDown="PreserveSelection">
   <UserControl.ContextMenu>
-    <ContextMenu>
+    <ContextMenu x:Name="TileContextMenu" Opened="OnContextMenuOpened">
+      <MenuItem x:Name="PinMenuItem" Header="置顶" Click="TogglePin" />
+      <MenuItem x:Name="ResendMenuItem" Header="重新发送" Click="ResendFile" />
+      <Separator x:Name="TopSeparator" />
       <MenuItem Header="在资源管理器中打开" Click="OpenInExplorer" />
       <MenuItem Header="属性" Click="ShowFileProperties" />
+      <Separator x:Name="BottomSeparator" />
+      <MenuItem x:Name="RemoveMenuItem" Header="移除记录" Click="RemoveFromGallery" />
     </ContextMenu>
   </UserControl.ContextMenu>
   <UserControl.Resources>
     <DataTemplate x:Key="GalleryFileContent">
-      <Grid ClipToBounds="True">
+      <Grid ClipToBounds="True" Background="{DynamicResource CardBrush}">
         <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="28"
                    Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" Visibility="{Binding HasThumbnail, Converter={StaticResource BoolVisibility}}" />
-        <Border Background="{DynamicResource PageBrush}">
+        <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1" CornerRadius="10" Padding="12,10">
           <Border.Style>
             <Style TargetType="Border"><Setter Property="Visibility" Value="Visible" />
               <Style.Triggers><DataTrigger Binding="{Binding IsImage}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
             </Style>
           </Border.Style>
-          <Grid Margin="0,12">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="24" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,6,0">
-              <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxHeight="44" TextTrimming="CharacterEllipsis" />
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="42" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Border Width="36" Height="36" CornerRadius="8" Background="{DynamicResource PageBrush}" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
+                         Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0,2,0">
+              <TextBlock Text="{Binding Name}" FontWeight="Medium" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" />
               <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,4,0,0" />
             </StackPanel>
-            <Border Grid.ColumnSpan="2" Height="1" Background="{DynamicResource BorderBrush}" VerticalAlignment="Bottom" />
           </Grid>
         </Border>
       </Grid>
@@ -69,6 +77,26 @@
         </Style>
       </Button.Style>
     </Button>
+    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6" Width="22" Height="22" CornerRadius="11"
+            Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            Opacity="0.92" IsHitTestVisible="False">
+      <Border.Style>
+        <Style TargetType="Border">
+          <Setter Property="Visibility" Value="Collapsed" />
+          <Style.Triggers>
+            <MultiDataTrigger>
+              <MultiDataTrigger.Conditions>
+                <Condition Binding="{Binding IsPinned}" Value="True" />
+                <Condition Binding="{Binding CanRemove, ElementName=Tile}" Value="False" />
+              </MultiDataTrigger.Conditions>
+              <Setter Property="Visibility" Value="Visible" />
+            </MultiDataTrigger>
+          </Style.Triggers>
+        </Style>
+      </Border.Style>
+      <TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10.5"
+                 Foreground="{DynamicResource PinBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
     <CheckBox HorizontalAlignment="Right" VerticalAlignment="Top" Margin="2"
               IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Mode=TwoWay}"
               Click="ToggleSelection" ToolTip="选择" AutomationProperties.Name="选择文件">

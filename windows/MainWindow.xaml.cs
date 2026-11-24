@@ -77,16 +77,45 @@ public partial class MainWindow : Window
         catch (Exception error) { Model.Report(error); }
     }
 
-    private void AddPeer(object sender, RoutedEventArgs args)
+    private void AddPeer(object sender, RoutedEventArgs args) => OpenAddPeerDialog(this);
+
+    internal void OpenAddPeerDialog(Window? owner = null)
     {
-        var dialog = new PromptWindow(this, "添加设备", "连接");
+        var dialog = new PromptWindow(owner ?? this, "手动添加设备", "连接");
         var host = dialog.AddField("IP 地址", "");
-        var port = dialog.AddField("端口", "53317");
-        dialog.Validate = () => !string.IsNullOrWhiteSpace(host.Text) && ValidPort(port.Text) ? "" : "请输入有效的地址和端口";
-        if (dialog.ShowDialog() == true) Model.Probe(host.Text.Trim(), int.Parse(port.Text));
+        host.Tag = "例如 192.168.1.10";
+        dialog.Validate = () => TryParseHostAndPort(host.Text, out _, out _) ? "" : "请输入有效的 IP 地址";
+        if (dialog.ShowDialog() == true && TryParseHostAndPort(host.Text, out var parsedHost, out var parsedPort))
+            Model.Probe(parsedHost, parsedPort);
+    }
+
+    private static bool TryParseHostAndPort(string input, out string host, out int port)
+    {
+        host = "";
+        port = 53317;
+        var trimmed = input.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return false;
+        var colon = trimmed.LastIndexOf(':');
+        if (colon > 0 && trimmed.IndexOf(':') == colon)
+        {
+            var hostPart = trimmed[..colon].Trim();
+            var portPart = trimmed[(colon + 1)..].Trim();
+            if (string.IsNullOrWhiteSpace(hostPart) || !ValidPort(portPart)) return false;
+            host = hostPart;
+            port = int.Parse(portPart);
+            return true;
+        }
+        host = trimmed;
+        return true;
     }
 
     private static bool ValidPort(string value) => int.TryParse(value, out var port) && port is >= 1 and <= 65535;
+
+    private void DismissToast(object sender, MouseButtonEventArgs args)
+    {
+        args.Handled = true;
+        Model.DismissToast();
+    }
 
     private void Receive(JsonElement value)
     {
@@ -121,6 +150,12 @@ public partial class MainWindow : Window
         { _ = PasteAsync(); args.Handled = true; }
         else if (args.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
         { PickFiles(sender, args); args.Handled = true; }
+        else if (args.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control)
+        { Model.RefreshCommand.Execute(null); args.Handled = true; }
+        else if (args.Key == Key.T && Keyboard.Modifiers == ModifierKeys.Control)
+        { ShowTextEditor(); args.Handled = true; }
+        else if (args.Key == Key.OemComma && Keyboard.Modifiers == ModifierKeys.Control)
+        { OpenSettings(sender, args); args.Handled = true; }
     }
 
     private void Exit(object sender, RoutedEventArgs args) => ((App)Application.Current).Quit();

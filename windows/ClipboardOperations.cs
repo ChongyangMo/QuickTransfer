@@ -35,7 +35,7 @@ public partial class MainWindow
                 await Model.AddFilesAsync(new[] { path });
             }
             else if (Clipboard.ContainsText()) { Model.Text = Clipboard.GetText(); ShowTextEditor(); }
-            else Model.Status = "没有可添加的图片、文件或文字";
+            else Model.ShowToast("剪贴板没有可添加的图片、文件或文字", false);
         }
         catch (Exception error) { Model.Report(error); }
     }

@@ -46,10 +46,25 @@ public sealed partial class MainViewModel
         }
     }
 
+    public void NotifyGalleryGroupingChanged()
+    {
+        RebuildGalleryTimeline();
+        Notify(nameof(GroupGalleryByTime));
+    }
+
     private void RebuildGalleryTimeline()
     {
         var entries = new List<object>();
-        foreach (var group in Gallery.GroupBy(item => item.Record.BatchId)
+        var pinned = Gallery.Where(item => item.File.IsPinned)
+            .OrderByDescending(item => item.Record.StartedAt)
+            .ToArray();
+        if (pinned.Length > 0)
+        {
+            entries.Add(new GalleryHeader("__pinned__", DateTimeOffset.MaxValue, "已置顶"));
+            entries.AddRange(pinned);
+        }
+        foreach (var group in Gallery.Where(item => !item.File.IsPinned)
+                     .GroupBy(item => item.Record.BatchId)
                      .OrderByDescending(group => group.Max(item => item.Record.StartedAt)))
         {
             if (GroupGalleryByTime)

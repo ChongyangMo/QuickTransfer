@@ -49,6 +49,40 @@ public partial class FileTile : UserControl
 
     private void PreserveSelection(object sender, MouseButtonEventArgs args) => args.Handled = true;
 
+    private void OnContextMenuOpened(object sender, RoutedEventArgs args)
+    {
+        var showGalleryActions = !CanRemove && DataContext is Attachment;
+        var visibility = showGalleryActions ? Visibility.Visible : Visibility.Collapsed;
+        PinMenuItem.Visibility = visibility;
+        ResendMenuItem.Visibility = visibility;
+        TopSeparator.Visibility = visibility;
+        BottomSeparator.Visibility = visibility;
+        RemoveMenuItem.Visibility = visibility;
+        if (DataContext is Attachment file)
+            PinMenuItem.Header = file.IsPinned ? "取消置顶" : "置顶";
+    }
+
+    private void TogglePin(object sender, RoutedEventArgs args)
+    {
+        if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
+        var targets = window.GalleryActionTargets(file);
+        window.Model.TogglePin(targets);
+    }
+
+    private async void ResendFile(object sender, RoutedEventArgs args)
+    {
+        if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
+        var targets = window.GalleryActionTargets(file);
+        await window.Model.ResendFilesAsync(targets);
+    }
+
+    private async void RemoveFromGallery(object sender, RoutedEventArgs args)
+    {
+        if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
+        var targets = window.GalleryActionTargets(file);
+        await window.Model.RemoveGalleryItemsAsync(targets);
+    }
+
     private void OpenInExplorer(object sender, RoutedEventArgs args) =>
         RunFileAction(file => ShellFileActions.OpenInExplorer(file.Path));
 
