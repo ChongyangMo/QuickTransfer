@@ -198,8 +198,7 @@ final class TransferService: ObservableObject {
     func pullRefresh() async {
         Haptics.shared.play(.pullRefresh)
         refresh()
-        try? await Task.sleep(nanoseconds: 550_000_000)
-        Haptics.shared.play(.complete)
+        try? await Task.sleep(nanoseconds: 350_000_000)
     }
     func command(_ value: [String:Any]) { sendJSON(value, to: qt_command) }
     private func sendJSON(_ value: [String:Any], to call: (UnsafePointer<CChar>?) -> Void) {

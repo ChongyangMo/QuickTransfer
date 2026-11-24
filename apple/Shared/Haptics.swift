@@ -174,12 +174,11 @@ final class Haptics {
             delay = 0.3
 
         case .pullRefresh:
-            // 水滴弹断 / 机械拨片回弹：干脆高锐度主弹 + 轻盈高锐度回弹余韵
+            // 单击高锐度清脆触发，干脆利落不拖尾
             events = [
-                transient(time: 0, intensity: 0.90, sharpness: 0.92),
-                transient(time: 0.072, intensity: 0.56, sharpness: 0.95),
+                transient(time: 0, intensity: 0.86, sharpness: 0.95)
             ]
-            delay = 0.30
+            delay = 0.25
 
         case .pin:
             events = [
