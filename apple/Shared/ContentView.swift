@@ -13,6 +13,7 @@ struct ContentView: View {
     var shareMode = false
     @State private var importing = false
     @State private var showTextComposer = false
+    @State private var pasteControlReady = false
     @FocusState private var textFocused: Bool
     #if os(iOS)
     @State private var photos: [PhotosPickerItem] = []
@@ -101,11 +102,14 @@ struct ContentView: View {
         .quickLookPreview($service.preview)
         .onDrop(of:[UTType.fileURL,UTType.image],isTargeted:nil) { service.importDropped($0) }
         .onAppear {
-            if !service.text.isEmpty { showTextComposer = true }
+            if !service.text.isEmpty {
+                showTextComposer = true
+                pasteControlReady = true
+            }
         }
         .onChange(of:service.text) { oldValue,value in
             if oldValue.isEmpty && !value.isEmpty && !showTextComposer {
-                showTextComposer = true
+                openTextComposer(focus:false)
             }
         }
         #if os(macOS)
@@ -204,13 +208,19 @@ struct ContentView: View {
                         .accessibilityLabel("发送文字")
                     HStack(spacing:10) {
                         #if os(iOS)
-                        PasteButton(payloadType:String.self) { strings in
-                            let pasted = strings.joined(separator:"\n")
-                            if !pasted.isEmpty { service.text = pasted }
+                        ZStack(alignment:.leading) {
+                            if pasteControlReady {
+                                PasteButton(payloadType:String.self) { strings in
+                                    let pasted = strings.joined(separator:"\n")
+                                    if !pasted.isEmpty { service.text = pasted }
+                                }
+                                .labelStyle(.titleAndIcon)
+                                .buttonBorderShape(.capsule)
+                                .controlSize(.small)
+                                .transition(.opacity)
+                            }
                         }
-                        .labelStyle(.titleAndIcon)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.small)
+                        .frame(minHeight:28)
                         #else
                         Button { service.paste() } label: {
                             Label("粘贴",systemImage:"doc.on.clipboard")
@@ -226,12 +236,7 @@ struct ContentView: View {
                                 .buttonStyle(.plain)
                         }
                         Spacer()
-                        Button {
-                            withAnimation(.easeInOut(duration:0.18)) {
-                                textFocused = false
-                                showTextComposer = false
-                            }
-                        } label: {
+                        Button { closeTextComposer() } label: {
                             Text("收起")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -241,7 +246,7 @@ struct ContentView: View {
                 }
                 .padding(12)
                 .background(Color.secondary.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
-                .transition(.opacity.combined(with:.move(edge:.top)))
+                .transition(.opacity)
             }
 
             if !service.attachments.isEmpty {
@@ -301,32 +306,54 @@ struct ContentView: View {
                     Button(service.pendingAutoSend ? "等待发送" : "发送") {
                         textFocused = false
                         service.send()
-                        if service.text.isEmpty { showTextComposer = false }
+                        if service.text.isEmpty { closeTextComposer() }
                     }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
                     .controlSize(.regular)
                     .disabled(!service.canSendToSelectedPeer || service.pendingAutoSend || (!service.importingPhotos && service.text.isEmpty && service.attachments.isEmpty))
                     .keyboardShortcut(.return,modifiers:.command)
+                    .transition(.opacity)
                 }
             }
         }
         .padding(.horizontal,14)
         .padding(.vertical,12)
-        .animation(.easeInOut(duration:0.18),value:showTextComposer)
+        .clipped()
     }
 
     private func toggleTextComposer() {
-        withAnimation(.easeInOut(duration:0.18)) {
-            if showTextComposer {
-                textFocused = false
-                showTextComposer = false
-            } else {
-                showTextComposer = true
-                DispatchQueue.main.asyncAfter(deadline:.now()+0.1) {
-                    textFocused = true
-                }
+        if showTextComposer {
+            closeTextComposer()
+        } else {
+            openTextComposer(focus:true)
+        }
+    }
+
+    private func openTextComposer(focus: Bool) {
+        pasteControlReady = false
+        withAnimation(.snappy(duration:0.24,extraBounce:0)) {
+            showTextComposer = true
+        }
+        if focus {
+            Task { @MainActor in
+                textFocused = true
             }
+        }
+        // 延后挂载跨进程 PasteButton，避免首帧 XPC 初始化拖卡展开动画
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.22) {
+            guard showTextComposer else { return }
+            withAnimation(.easeIn(duration:0.12)) {
+                pasteControlReady = true
+            }
+        }
+    }
+
+    private func closeTextComposer() {
+        textFocused = false
+        pasteControlReady = false
+        withAnimation(.snappy(duration:0.22,extraBounce:0)) {
+            showTextComposer = false
         }
     }
 }
@@ -334,10 +361,8 @@ struct ContentView: View {
 struct TransferRowView: View {
     let row: TransferRow
     @ObservedObject var service: TransferService
-
-    private var existingFileURLs: [URL] {
-        row.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
-    }
+    @State private var existingFileURLs: [URL] = []
+    @State private var checkedFiles = false
 
     private var iconName: String {
         if row.text != nil { return "text.bubble.fill" }
@@ -354,7 +379,7 @@ struct TransferRowView: View {
         if row.size > 0 {
             parts.append(ByteCountFormatter.string(fromByteCount:row.size,countStyle:.file))
         }
-        if row.text == nil && !row.fileURLs.isEmpty && existingFileURLs.isEmpty && row.finished {
+        if checkedFiles && row.text == nil && !row.fileURLs.isEmpty && existingFileURLs.isEmpty && row.finished {
             parts.append("缓存已清理")
         }
         return parts.joined(separator:" · ")
@@ -445,6 +470,21 @@ struct TransferRowView: View {
             }
         }
         .padding(.vertical,6)
+        .task(id:"\(row.id)-\(row.finished)-\(service.cacheItemCount)") {
+            let candidates = row.fileURLs
+            guard !candidates.isEmpty else {
+                existingFileURLs = []
+                checkedFiles = true
+                return
+            }
+            let alive = await Task.detached(priority:.utility) {
+                candidates.filter { FileManager.default.fileExists(atPath:$0.path) }
+            }.value
+            if !Task.isCancelled {
+                existingFileURLs = alive
+                checkedFiles = true
+            }
+        }
     }
 }
 
