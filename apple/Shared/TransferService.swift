@@ -394,7 +394,7 @@ final class TransferService: ObservableObject {
     }
     func clearOutboxCacheNow() {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
-        let active = activeOutboxFolders(includePinned: true)
+        let active = activeOutboxFolders(includePinned: false)
         let snapshotRows = rows
         Task { [weak self] in
             let (stats, deadRowIDs) = await Task.detached(priority: .userInitiated) {
