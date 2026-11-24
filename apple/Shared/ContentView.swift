@@ -64,7 +64,7 @@ struct ContentView: View {
                         .listRowInsets(EdgeInsets(top:6,leading:16,bottom:6,trailing:16))
                         .swipeActions(edge:.leading,allowsFullSwipe:true) {
                             Button {
-                                Haptics.shared.play(.action)
+                                Haptics.shared.play(.pin)
                                 withAnimation(.snappy(duration:0.25)) {
                                     service.togglePinRow(row.id)
                                 }
@@ -138,9 +138,9 @@ struct ContentView: View {
                 .accessibilityLabel("输入文字")
 
                 if shareMode {
-                    Button { Haptics.shared.play(.tap); service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
+                    Button { Haptics.shared.play(.expand); service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
                 } else {
-                    Button { Haptics.shared.play(.tap); service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置")
+                    Button { Haptics.shared.play(.expand); service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置")
                 }
             }
         }
@@ -176,7 +176,7 @@ struct ContentView: View {
                 .padding(.horizontal,20)
                 .padding(.bottom,18)
                 .transition(.move(edge:.bottom).combined(with:.opacity))
-                .onTapGesture { service.dismissToast() }
+                .onTapGesture { Haptics.shared.play(.collapse); service.dismissToast() }
             }
         }
         .animation(.snappy(duration:0.25),value:service.toast)
@@ -243,8 +243,10 @@ struct ContentView: View {
                         let isOnline = service.isPeerOnline(peer.id)
                         Button {
                             if service.selected != peer.id {
-                                Haptics.shared.play(.selection)
+                                Haptics.shared.play(.deviceSwitch)
                                 service.selected = peer.id
+                            } else {
+                                Haptics.shared.play(.tap)
                             }
                         } label: {
                             HStack(spacing:12) {
@@ -347,7 +349,7 @@ struct ContentView: View {
                             .buttonStyle(.plain)
                     }
                     Spacer()
-                    Button { Haptics.shared.play(.tap); closeTextComposer() } label: {
+                    Button { Haptics.shared.play(.collapse); closeTextComposer() } label: {
                         Text("收起")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -381,7 +383,7 @@ struct ContentView: View {
             HStack(spacing:10) {
                 #if os(iOS)
                 if !shareMode {
-                    Button { Haptics.shared.play(.tap); showFastPhotoPicker = true } label: {
+                    Button { Haptics.shared.play(.expand); showFastPhotoPicker = true } label: {
                         Label("照片",systemImage:"photo")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
@@ -449,10 +451,11 @@ struct ContentView: View {
     }
 
     private func toggleTextComposer() {
-        Haptics.shared.play(.tap)
         if showTextComposer {
+            Haptics.shared.play(.collapse)
             closeTextComposer()
         } else {
+            Haptics.shared.play(.expand)
             openTextComposer(focus:true)
         }
     }
@@ -556,6 +559,7 @@ struct TransferRowView: View {
         }
         .contextMenu {
             Button {
+                Haptics.shared.play(.pin)
                 withAnimation(.snappy(duration:0.25)) {
                     service.togglePinRow(row.id)
                 }
@@ -570,11 +574,13 @@ struct TransferRowView: View {
                 }
             } else if let url = existingFileURLs.first {
                 Button {
+                    Haptics.shared.play(.tap)
                     service.preview = url
                 } label: {
                     Label("预览",systemImage:"eye")
                 }
                 Button {
+                    Haptics.shared.play(.action)
                     service.stageExistingRowFiles(row)
                 } label: {
                     Label("重新发送",systemImage:"paperplane")
@@ -592,6 +598,7 @@ struct TransferRowView: View {
             }
             Divider()
             Button(role:.destructive) {
+                Haptics.shared.play(.warning)
                 withAnimation(.snappy(duration:0.25)) {
                     service.deleteRow(row.id)
                 }
@@ -693,6 +700,7 @@ struct SettingsView:View {
     @ObservedObject var service:TransferService
     @Environment(\.dismiss) private var dismiss
     @State private var showClearCacheConfirm = false
+    @State private var showManualAdd = false
     @State private var initialAlias = ""
     @State private var initialPort: UInt16 = 53317
     @State private var lastSliderHapticBucket = -1
@@ -727,11 +735,21 @@ struct SettingsView:View {
                         TextField("例如：我的 iPhone",text:$service.settings.alias)
                             .multilineTextAlignment(.trailing)
                     }
-                    NavigationLink {
-                        AddressView(service:service,onConnected:{ dismiss() })
+                    Button {
+                        Haptics.shared.play(.tap)
+                        showManualAdd = true
                     } label: {
-                        Label("手动添加设备",systemImage:"network")
+                        HStack {
+                            Label("手动添加设备",systemImage:"network")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName:"chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     if connectionChanged {
                         Button("应用更改并重新连接") {
                             saveAndDismiss(forceRestart:true)
@@ -794,6 +812,9 @@ struct SettingsView:View {
                     }
                 }
             }
+            .navigationDestination(isPresented:$showManualAdd) {
+                AddressView(service:service,onConnected:{ dismiss() })
+            }
             .navigationTitle("设置")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -824,7 +845,7 @@ struct SettingsView:View {
     }
 
     private func saveAndDismiss(forceRestart: Bool) {
-        Haptics.shared.play(forceRestart || connectionChanged ? .confirm : .tap)
+        Haptics.shared.play(forceRestart || connectionChanged ? .confirm : .collapse)
         service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
         service.saveSettings()
         service.cleanExpiredOutbox()
@@ -871,6 +892,9 @@ struct AddressView:View {
                             #endif
                     }
                 }
+                .onChange(of:showPort) { _,expanded in
+                    Haptics.shared.play(expanded ? .expand : .collapse)
+                }
             } header: {
                 Text("目标设备")
             } footer: {
@@ -900,7 +924,7 @@ struct AddressView:View {
         .toolbar {
             if isSheet {
                 ToolbarItem(placement:.cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button("取消") { Haptics.shared.play(.collapse); dismiss() }
                 }
             }
         }

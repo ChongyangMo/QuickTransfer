@@ -196,7 +196,7 @@ final class TransferService: ObservableObject {
     func restart() { error = nil; stop(); start() }
     func refresh() { if ready { command(["action":"refresh"]); bonjour?.refresh() } else { restart() } }
     func pullRefresh() async {
-        Haptics.shared.play(.action)
+        Haptics.shared.play(.pullRefresh)
         refresh()
         try? await Task.sleep(nanoseconds: 550_000_000)
         Haptics.shared.play(.complete)

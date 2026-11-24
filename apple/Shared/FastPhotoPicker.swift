@@ -172,12 +172,14 @@ struct FastPhotoPickerSheet: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 28)
                         Button("前往系统设置") {
+                            Haptics.shared.play(.tap)
                             if let url = URL(string: "app-settings:") {
                                 openURL(url)
                             }
                         }
                         .buttonStyle(.borderedProminent)
                         Button("改用系统相册选择") {
+                            Haptics.shared.play(.expand)
                             dismiss()
                             onUseSystemPicker()
                         }
@@ -190,14 +192,14 @@ struct FastPhotoPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { Haptics.shared.play(.tap); dismiss() } label: {
+                    Button { Haptics.shared.play(.collapse); dismiss() } label: {
                         Image(systemName: "chevron.left")
                     }
                     .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Haptics.shared.play(.tap)
+                        Haptics.shared.play(.expand)
                         dismiss()
                         onUseSystemPicker()
                     } label: {
@@ -220,6 +222,7 @@ struct FastPhotoPickerSheet: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button("开启全部") {
+                Haptics.shared.play(.tap)
                 if let url = URL(string: "app-settings:") {
                     openURL(url)
                 }
@@ -234,7 +237,7 @@ struct FastPhotoPickerSheet: View {
     private var actionBar: some View {
         HStack(spacing: 10) {
             Button {
-                Haptics.shared.play(.tap)
+                Haptics.shared.play(.collapse)
                 selectedIDs.removeAll()
             } label: {
                 Text("取消选中")
