@@ -793,9 +793,9 @@ struct SettingsView:View {
                         }
                         Slider(
                             value:retentionDaysBinding,
-                            in:Double(Settings.minCacheRetentionDays)...Double(Settings.maxCacheRetentionDays),
-                            step:1
+                            in:Double(Settings.minCacheRetentionDays)...Double(Settings.maxCacheRetentionDays)
                         )
+                        .labelsHidden()
                         HStack(spacing:8) {
                             ForEach(presetDays, id:\.self) { days in
                                 let selected = service.settings.cacheRetentionDays == days
