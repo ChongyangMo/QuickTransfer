@@ -61,6 +61,40 @@ struct ContentView: View {
                 List(service.rows) { row in
                     TransferRowView(row:row,service:service)
                         .listRowInsets(EdgeInsets(top:6,leading:16,bottom:6,trailing:16))
+                        .swipeActions(edge:.leading,allowsFullSwipe:true) {
+                            Button {
+                                withAnimation(.snappy(duration:0.25)) {
+                                    service.togglePinRow(row.id)
+                                }
+                            } label: {
+                                Label(row.pinned ? "取消置顶" : "置顶",systemImage:row.pinned ? "pin.slash.fill" : "pin.fill")
+                            }
+                            .tint(row.pinned ? .gray : .orange)
+                        }
+                        .swipeActions(edge:.trailing,allowsFullSwipe:true) {
+                            Button(role:.destructive) {
+                                withAnimation(.snappy(duration:0.25)) {
+                                    service.deleteRow(row.id)
+                                }
+                            } label: {
+                                Label("删除",systemImage:"trash")
+                            }
+                            if let text = row.text {
+                                Button {
+                                    service.copy(text)
+                                } label: {
+                                    Label("复制",systemImage:"doc.on.doc")
+                                }
+                                .tint(.blue)
+                            } else if !row.fileURLs.isEmpty {
+                                Button {
+                                    service.stageExistingRowFiles(row)
+                                } label: {
+                                    Label("重发",systemImage:"paperplane")
+                                }
+                                .tint(.blue)
+                            }
+                        }
                 }
                 .listStyle(.plain)
                 .ignoresSafeArea(.keyboard,edges:.bottom)
@@ -388,6 +422,11 @@ struct TransferRowView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(row.text != nil ? 2 : 1)
                     Spacer(minLength:4)
+                    if row.pinned {
+                        Image(systemName:"pin.fill")
+                            .font(.system(size:10))
+                            .foregroundStyle(.orange)
+                    }
                     Text(row.started,style:.time)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -425,6 +464,13 @@ struct TransferRowView: View {
             handleTap()
         }
         .contextMenu {
+            Button {
+                withAnimation(.snappy(duration:0.25)) {
+                    service.togglePinRow(row.id)
+                }
+            } label: {
+                Label(row.pinned ? "取消置顶" : "置顶",systemImage:row.pinned ? "pin.slash" : "pin")
+            }
             if let text = row.text {
                 Button {
                     copyWithFeedback(text)
@@ -437,6 +483,11 @@ struct TransferRowView: View {
                 } label: {
                     Label("预览",systemImage:"eye")
                 }
+                Button {
+                    service.stageExistingRowFiles(row)
+                } label: {
+                    Label("重新发送",systemImage:"paperplane")
+                }
                 ShareLink(item:url) {
                     Label("分享",systemImage:"square.and.arrow.up")
                 }
@@ -447,6 +498,14 @@ struct TransferRowView: View {
                     Label("在访达显示",systemImage:"folder")
                 }
                 #endif
+            }
+            Divider()
+            Button(role:.destructive) {
+                withAnimation(.snappy(duration:0.25)) {
+                    service.deleteRow(row.id)
+                }
+            } label: {
+                Label("删除",systemImage:"trash")
             }
         }
         .task(id:"\(row.id)-\(row.finished)-\(service.cacheItemCount)") {

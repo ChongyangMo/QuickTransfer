@@ -92,6 +92,7 @@ final class TransferService: ObservableObject {
                     if let path=rows[index].path,path.hasPrefix(previous.path+"/") { rows[index].path=location.path+path.dropFirst(previous.path.count) }
                 }
                 #endif
+                sortRows()
             }
             catch { self.error = "接收记录读取失败：\(error.localizedDescription)" }
         }
@@ -332,7 +333,7 @@ final class TransferService: ObservableObject {
         if rows.contains(where: { $0.fileURLs.contains(where: { $0.standardizedFileURL.path == target }) }) { return true }
         return false
     }
-    private func activeOutboxFolders() -> Set<String> {
+    private func activeOutboxFolders(includePinned: Bool = false) -> Set<String> {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let prefix = outboxRoot.path + "/"
         var keptFolders = Set<String>()
@@ -346,6 +347,9 @@ final class TransferService: ObservableObject {
         }
         attachments.forEach(collect)
         outgoingDrafts.values.forEach { $0.1.forEach(collect) }
+        if includePinned {
+            rows.filter(\.pinned).forEach { $0.fileURLs.forEach(collect) }
+        }
         return keptFolders
     }
     func refreshCacheStats() {
@@ -363,7 +367,7 @@ final class TransferService: ObservableObject {
         let days = Settings.clampedRetentionDays(settings.cacheRetentionDays)
         let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
-        let active = activeOutboxFolders()
+        let active = activeOutboxFolders(includePinned: true)
         let snapshotRows = rows
         Task { [weak self] in
             let (stats, deadRowIDs) = await Task.detached(priority: .utility) {
@@ -390,7 +394,7 @@ final class TransferService: ObservableObject {
     }
     func clearOutboxCacheNow() {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
-        let active = activeOutboxFolders()
+        let active = activeOutboxFolders(includePinned: true)
         let snapshotRows = rows
         Task { [weak self] in
             let (stats, deadRowIDs) = await Task.detached(priority: .userInitiated) {
@@ -409,6 +413,58 @@ final class TransferService: ObservableObject {
             self.cacheSizeBytes = stats.bytes
             self.removeRows(withIDs: deadRowIDs)
         }
+    }
+    func togglePinRow(_ id: String) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        rows[index].pinned.toggle()
+        sortRows()
+        saveHistory()
+    }
+    func deleteRow(_ id: String) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        let removed = rows.remove(at: index)
+        if !removed.finished && removed.direction == "send" {
+            command(["action":"cancel","id":id])
+        }
+        saveHistory()
+        let root = self.root
+        let orphaned = removed.fileURLs.filter { !isURLReferenced($0) }
+        if !orphaned.isEmpty {
+            Task { [weak self] in
+                await Task.detached(priority: .utility) {
+                    for url in orphaned {
+                        Self.deleteOutboxEntryIfOwned(url, root: root)
+                    }
+                }.value
+                self?.refreshCacheStats()
+            }
+        }
+    }
+    func stageExistingRowFiles(_ row: TransferRow) {
+        let alive = row.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !alive.isEmpty else { return }
+        let existing = Set(attachments.map { $0.standardizedFileURL.path })
+        let toAdd = alive.filter { !existing.contains($0.standardizedFileURL.path) }
+        if !toAdd.isEmpty {
+            attachments.append(contentsOf: toAdd)
+        }
+    }
+    private func sortRows() {
+        rows.sort { a, b in
+            if a.pinned != b.pinned { return a.pinned && !b.pinned }
+            return a.started > b.started
+        }
+    }
+    private func trimRowsIfNeeded() {
+        guard rows.count > 30 else { return }
+        while rows.count > 30 {
+            if let lastUnpinned = rows.lastIndex(where: { !$0.pinned }) {
+                rows.remove(at: lastUnpinned)
+            } else {
+                rows.removeLast()
+            }
+        }
+        cleanExpiredOutbox()
     }
     private func removeRows(withIDs ids: Set<String>) {
         guard !ids.isEmpty else { return }
@@ -526,10 +582,8 @@ final class TransferService: ObservableObject {
         case "dismiss": if incoming?.id == id { incoming = nil }
         case "transfer":
             rows.insert(TransferRow(id:id,name:value["name"] as? String ?? "",size:(value["size"] as? NSNumber)?.int64Value ?? 0,direction:value["direction"] as? String ?? "send",paths:value["paths"] as? [String]),at:0)
-            if rows.count > 30 {
-                rows.removeLast(rows.count - 30)
-                cleanExpiredOutbox()
-            }
+            sortRows()
+            trimRowsIfNeeded()
         case "progress":
             if let index = rows.firstIndex(where:{$0.id == id}), !rows[index].finished { rows[index].bytes = (value["bytes"] as? NSNumber)?.int64Value ?? 0 }
         case "sent", "received":
@@ -543,6 +597,8 @@ final class TransferService: ObservableObject {
             if type == "received" { onReceive?(value["name"] as? String ?? "",nil) }
         case "text":
             rows.insert(TransferRow(id:id,name:value["alias"] as? String ?? "文字",size:0,direction:"receive",state:"已接收",text:value["text"] as? String,finished:true),at:0)
+            sortRows()
+            trimRowsIfNeeded()
             saveHistory()
             onReceive?(value["alias"] as? String ?? "",value["text"] as? String ?? "")
         case "failed", "cancelled":

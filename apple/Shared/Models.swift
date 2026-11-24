@@ -21,8 +21,44 @@ struct TransferRow: Identifiable, Codable {
     var text: String?
     var started: Date = Date()
     var finished: Bool = false
+    var pinned: Bool = false
     var progress: Double { size > 0 ? min(1, Double(bytes) / Double(size)) : 0 }
     var fileURLs: [URL] { (paths ?? path.map { [$0] } ?? []).map { URL(fileURLWithPath:$0) } }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, size, bytes, direction, state, path, paths, text, started, finished, pinned
+    }
+
+    init(id: String, name: String, size: Int64, bytes: Int64 = 0, direction: String, state: String = "传输中", path: String? = nil, paths: [String]? = nil, text: String? = nil, started: Date = Date(), finished: Bool = false, pinned: Bool = false) {
+        self.id = id
+        self.name = name
+        self.size = size
+        self.bytes = bytes
+        self.direction = direction
+        self.state = state
+        self.path = path
+        self.paths = paths
+        self.text = text
+        self.started = started
+        self.finished = finished
+        self.pinned = pinned
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        size = try c.decode(Int64.self, forKey: .size)
+        bytes = try c.decodeIfPresent(Int64.self, forKey: .bytes) ?? 0
+        direction = try c.decode(String.self, forKey: .direction)
+        state = try c.decodeIfPresent(String.self, forKey: .state) ?? "传输中"
+        path = try c.decodeIfPresent(String.self, forKey: .path)
+        paths = try c.decodeIfPresent([String].self, forKey: .paths)
+        text = try c.decodeIfPresent(String.self, forKey: .text)
+        started = try c.decodeIfPresent(Date.self, forKey: .started) ?? Date()
+        finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? false
+        pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+    }
 }
 struct Incoming: Identifiable {
     var id: String
