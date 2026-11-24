@@ -167,14 +167,79 @@ struct ReceiveSheet: View {
 struct SettingsView:View {
     @ObservedObject var service:TransferService
     @Environment(\.dismiss) private var dismiss
+    private let presetDays = [3, 7, 30, 365]
+
+    private var retentionDaysBinding: Binding<Double> {
+        Binding(
+            get: { Double(service.settings.cacheRetentionDays) },
+            set: { service.settings.cacheRetentionDays = Settings.clampedRetentionDays(Int($0.rounded())) }
+        )
+    }
+
     var body:some View {
         NavigationStack {
             Form {
-                TextField("设备名称",text:$service.settings.alias)
-                TextField("端口",value:$service.settings.port,format:.number.grouping(.never))
-                Button("保存并重新连接") { service.saveSettings();service.restart();dismiss() }
-            }.padding().navigationTitle("设置").toolbar { Button("完成") { dismiss() } }
-        }.frame(minWidth:320,minHeight:220)
+                Section("设备连接") {
+                    TextField("设备名称",text:$service.settings.alias)
+                    TextField("端口",value:$service.settings.port,format:.number.grouping(.never))
+                    Button("保存并重新连接") {
+                        service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
+                        service.saveSettings()
+                        service.cleanExpiredOutbox()
+                        service.restart()
+                        dismiss()
+                    }
+                }
+                Section("发送缓存清理") {
+                    VStack(alignment:.leading,spacing:10) {
+                        HStack {
+                            Text("缓存保留时间")
+                            Spacer()
+                            Text("\(service.settings.cacheRetentionDays) 天")
+                                .foregroundStyle(.tint)
+                                .monospacedDigit()
+                        }
+                        Slider(
+                            value:retentionDaysBinding,
+                            in:Double(Settings.minCacheRetentionDays)...Double(Settings.maxCacheRetentionDays),
+                            step:1
+                        )
+                        HStack(spacing:8) {
+                            ForEach(presetDays, id:\.self) { days in
+                                Button("\(days)天") {
+                                    service.settings.cacheRetentionDays = days
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(service.settings.cacheRetentionDays == days ? .accentColor : .secondary)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .padding(.vertical,4)
+                    HStack {
+                        Text("当前缓存：\(service.cacheItemCount) 项 · \(ByteCountFormatter.string(fromByteCount:service.cacheSizeBytes,countStyle:.file))")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("立即清理",role:.destructive) {
+                            service.clearOutboxCacheNow()
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(service.cacheItemCount == 0)
+                    }
+                }
+            }
+            .navigationTitle("设置")
+            .toolbar {
+                Button("完成") {
+                    service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
+                    service.saveSettings()
+                    service.cleanExpiredOutbox()
+                    dismiss()
+                }
+            }
+            .onAppear { service.refreshCacheStats() }
+        }.frame(minWidth:340,minHeight:360)
     }
 }
 struct AddressView:View {

@@ -22,6 +22,8 @@ final class TransferService: ObservableObject {
     @Published private(set) var importingPhotos = false
     @Published private(set) var importingPhotoCount = 0
     @Published private(set) var pendingAutoSend = false
+    @Published private(set) var cacheSizeBytes: Int64 = 0
+    @Published private(set) var cacheItemCount = 0
     @Published var rows: [TransferRow] = []
     @Published var incoming: Incoming?
     @Published var error: String?
@@ -90,7 +92,7 @@ final class TransferService: ObservableObject {
             Task { @MainActor in self?.poll() }
         }
         RunLoop.main.add(timer!,forMode:.common)
-        pruneUnusedOutbox()
+        cleanExpiredOutbox()
     }
     func start(portOverride: UInt16? = nil) {
         guard !hasStarted else { return }
@@ -323,7 +325,7 @@ final class TransferService: ObservableObject {
         if rows.contains(where: { $0.fileURLs.contains(where: { $0.standardizedFileURL.path == target }) }) { return true }
         return false
     }
-    private func pruneUnusedOutbox() {
+    private func activeOutboxFolders() -> Set<String> {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
         let prefix = outboxRoot.path + "/"
         var keptFolders = Set<String>()
@@ -337,16 +339,84 @@ final class TransferService: ObservableObject {
         }
         attachments.forEach(collect)
         outgoingDrafts.values.forEach { $0.1.forEach(collect) }
-        rows.forEach { $0.fileURLs.forEach(collect) }
-        Task.detached(priority: .utility) {
+        return keptFolders
+    }
+    func refreshCacheStats() {
+        let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
+        let active = activeOutboxFolders()
+        Task.detached(priority: .utility) { [weak self] in
+            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
+            await MainActor.run {
+                self?.cacheItemCount = stats.count
+                self?.cacheSizeBytes = stats.bytes
+            }
+        }
+    }
+    func cleanExpiredOutbox() {
+        let days = Settings.clampedRetentionDays(settings.cacheRetentionDays)
+        let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
+        let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
+        let active = activeOutboxFolders()
+        Task.detached(priority: .utility) { [weak self] in
             let fm = FileManager.default
-            guard let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) else { return }
-            for entry in entries {
-                if !keptFolders.contains(entry.lastPathComponent) {
+            let keys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey]
+            if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: Array(keys)) {
+                for entry in entries where !active.contains(entry.lastPathComponent) {
+                    let values = try? entry.resourceValues(forKeys: keys)
+                    let modified = values?.contentModificationDate ?? values?.creationDate
+                    if let modified, modified < cutoff {
+                        try? fm.removeItem(at: entry)
+                    }
+                }
+            }
+            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
+            await MainActor.run {
+                self?.cacheItemCount = stats.count
+                self?.cacheSizeBytes = stats.bytes
+            }
+        }
+    }
+    func clearOutboxCacheNow() {
+        let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
+        let active = activeOutboxFolders()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let fm = FileManager.default
+            if let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) {
+                for entry in entries where !active.contains(entry.lastPathComponent) {
                     try? fm.removeItem(at: entry)
                 }
             }
+            let stats = Self.measureOutbox(at: outboxRoot, excluding: active)
+            await MainActor.run {
+                self?.cacheItemCount = stats.count
+                self?.cacheSizeBytes = stats.bytes
+            }
         }
+    }
+    private nonisolated static func measureOutbox(at outboxRoot: URL, excluding active: Set<String>) -> (count: Int, bytes: Int64) {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey]) else {
+            return (0, 0)
+        }
+        var count = 0
+        var total: Int64 = 0
+        for entry in entries where !active.contains(entry.lastPathComponent) {
+            count += 1
+            if let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory, isDir {
+                if let enumerator = fm.enumerator(at: entry, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) {
+                    for case let file as URL in enumerator {
+                        let values = try? file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                        if values?.isRegularFile == true {
+                            total += Int64(values?.fileSize ?? 0)
+                        }
+                    }
+                }
+            } else {
+                let size = (try? entry.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                total += Int64(size)
+            }
+        }
+        return (count, total)
     }
     private nonisolated static func deleteOutboxEntryIfOwned(_ url: URL, root: URL) {
         let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
@@ -419,7 +489,7 @@ final class TransferService: ObservableObject {
             rows.insert(TransferRow(id:id,name:value["name"] as? String ?? "",size:(value["size"] as? NSNumber)?.int64Value ?? 0,direction:value["direction"] as? String ?? "send",paths:value["paths"] as? [String]),at:0)
             if rows.count > 30 {
                 rows.removeLast(rows.count - 30)
-                pruneUnusedOutbox()
+                cleanExpiredOutbox()
             }
         case "progress":
             if let index = rows.firstIndex(where:{$0.id == id}), !rows[index].finished { rows[index].bytes = (value["bytes"] as? NSNumber)?.int64Value ?? 0 }

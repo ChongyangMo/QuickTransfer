@@ -32,8 +32,37 @@ struct Incoming: Identifiable {
     var text: String?
 }
 struct Settings: Codable {
+    static let defaultCacheRetentionDays = 7
+    static let minCacheRetentionDays = 1
+    static let maxCacheRetentionDays = 365
+
     var alias: String
     var port: UInt16 = 53317
     var lastPeer: String?
+    var cacheRetentionDays: Int = Settings.defaultCacheRetentionDays
+
+    enum CodingKeys: String, CodingKey {
+        case alias, port, lastPeer, cacheRetentionDays
+    }
+
+    init(alias: String, port: UInt16 = 53317, lastPeer: String? = nil, cacheRetentionDays: Int = Settings.defaultCacheRetentionDays) {
+        self.alias = alias
+        self.port = port
+        self.lastPeer = lastPeer
+        self.cacheRetentionDays = Self.clampedRetentionDays(cacheRetentionDays)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        alias = try container.decode(String.self, forKey: .alias)
+        port = try container.decodeIfPresent(UInt16.self, forKey: .port) ?? 53317
+        lastPeer = try container.decodeIfPresent(String.self, forKey: .lastPeer)
+        let days = try container.decodeIfPresent(Int.self, forKey: .cacheRetentionDays) ?? Self.defaultCacheRetentionDays
+        cacheRetentionDays = Self.clampedRetentionDays(days)
+    }
+
+    static func clampedRetentionDays(_ value: Int) -> Int {
+        min(maxCacheRetentionDays, max(minCacheRetentionDays, value))
+    }
 }
 

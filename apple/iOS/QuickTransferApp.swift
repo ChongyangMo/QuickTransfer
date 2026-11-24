@@ -10,7 +10,7 @@ struct QuickTransferApp:App {
             NavigationStack { ContentView(service:service) }
                 .onAppear{service.start();keeper.prepare()}
                 .onChange(of:phase) { _,phase in
-                    if phase == .active { keeper.enterForeground();service.start();service.importShared() }
+                    if phase == .active { keeper.enterForeground();service.start();service.importShared();service.cleanExpiredOutbox() }
                     else { keeper.enterBackground() }
                 }
         }
