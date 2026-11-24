@@ -118,7 +118,6 @@ struct FastPhotoPickerSheet: View {
     @StateObject private var store = FastPhotoStore()
     @State private var selectedIDs: [String] = []
     private let maxSelection = 100
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
 
     private var canSendDirectly: Bool {
         service.canSendToSelectedPeer
@@ -142,16 +141,12 @@ struct FastPhotoPickerSheet: View {
                         if store.assets.isEmpty {
                             ContentUnavailableView("暂无照片", systemImage: "photo.on.rectangle.angled")
                         } else {
-                            ScrollView {
-                                LazyVGrid(columns: columns, spacing: 2) {
-                                    ForEach(store.assets, id: \.localIdentifier) { asset in
-                                        let order = selectedIDs.firstIndex(of: asset.localIdentifier).map { $0 + 1 }
-                                        PhotoGridCell(asset: asset, store: store, selectionOrder: order) {
-                                            toggleSelection(asset.localIdentifier)
-                                        }
-                                    }
-                                }
-                            }
+                            DragSelectPhotoGrid(
+                                assets: store.assets,
+                                store: store,
+                                selectedIDs: $selectedIDs,
+                                maxSelection: maxSelection
+                            )
                         }
                         if !selectedIDs.isEmpty {
                             Divider()
@@ -236,16 +231,31 @@ struct FastPhotoPickerSheet: View {
     }
 
     private var actionBar: some View {
-        HStack(spacing: 12) {
-            Text("已选 \(selectedIDs.count) 张原图")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            Button {
+                selectedIDs.removeAll()
+            } label: {
+                Text("取消选中")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.secondary.opacity(0.14), in: Capsule())
+            }
+            .buttonStyle(.plain)
             Spacer()
             if canSendDirectly {
-                Button("仅添加") {
+                Button {
                     commit(autoSend: false)
+                } label: {
+                    Text("仅添加")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 Button("发送 (\(selectedIDs.count))") {
                     commit(autoSend: true)
                 }
@@ -262,14 +272,6 @@ struct FastPhotoPickerSheet: View {
         .background(.bar)
     }
 
-    private func toggleSelection(_ id: String) {
-        if let index = selectedIDs.firstIndex(of: id) {
-            selectedIDs.remove(at: index)
-        } else if selectedIDs.count < maxSelection {
-            selectedIDs.append(id)
-        }
-    }
-
     private func commit(autoSend: Bool) {
         let picked = selectedAssets
         guard !picked.isEmpty else { return }
@@ -278,71 +280,419 @@ struct FastPhotoPickerSheet: View {
     }
 }
 
-private struct PhotoGridCell: View {
-    let asset: PHAsset
+private struct DragSelectPhotoGrid: UIViewRepresentable {
+    let assets: [PHAsset]
     let store: FastPhotoStore
-    let selectionOrder: Int?
-    let onTap: () -> Void
-    @State private var image: UIImage?
-    @State private var requestID: PHImageRequestID = PHInvalidImageRequestID
+    @Binding var selectedIDs: [String]
+    let maxSelection: Int
 
-    var body: some View {
-        Button(action: onTap) {
-            Color.secondary.opacity(0.12)
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    }
-                }
-                .clipped()
-                .overlay {
-                    if selectionOrder != nil {
-                        Color.black.opacity(0.18)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    selectionBadge
-                        .padding(5)
-                }
-                .contentShape(Rectangle())
+    func makeCoordinator() -> Coordinator {
+        Coordinator(store: store, selectedIDs: $selectedIDs, maxSelection: maxSelection)
+    }
+
+    func makeUIView(context: Context) -> UICollectionView {
+        let layout = UICollectionViewFlowLayout()
+        layout.minimumInteritemSpacing = 2
+        layout.minimumLineSpacing = 2
+        let collectionView = PhotoGridCollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.alwaysBounceVertical = true
+        collectionView.dataSource = context.coordinator
+        collectionView.delegate = context.coordinator
+        collectionView.register(PhotoAssetCell.self, forCellWithReuseIdentifier: PhotoAssetCell.reuseID)
+        context.coordinator.attach(to: collectionView)
+        return collectionView
+    }
+
+    func updateUIView(_ uiView: UICollectionView, context: Context) {
+        context.coordinator.selectedIDsBinding = $selectedIDs
+        context.coordinator.update(assets: assets, selectedIDs: selectedIDs, in: uiView)
+    }
+
+    final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegate, UIGestureRecognizerDelegate {
+        let store: FastPhotoStore
+        var selectedIDsBinding: Binding<[String]>
+        let maxSelection: Int
+
+        private weak var collectionView: UICollectionView?
+        private var assets: [PHAsset] = []
+        private var assetIDs: [String] = []
+        private var selectedIDs: [String] = []
+        private var selectionOrderMap: [String: Int] = [:]
+
+        private var dragStartIndex: Int?
+        private var dragBaseSelection: [String] = []
+        private var dragSelectMode = true
+        private var lastDragIndex: Int?
+        private var dragPointInViewport: CGPoint = .zero
+        private var autoScrollLink: CADisplayLink?
+        private let feedback = UISelectionFeedbackGenerator()
+
+        init(store: FastPhotoStore, selectedIDs: Binding<[String]>, maxSelection: Int) {
+            self.store = store
+            self.selectedIDsBinding = selectedIDs
+            self.maxSelection = maxSelection
         }
-        .buttonStyle(.plain)
-        .onAppear { loadThumbnail() }
-        .onDisappear {
+
+        deinit {
+            autoScrollLink?.invalidate()
+        }
+
+        func attach(to collectionView: UICollectionView) {
+            self.collectionView = collectionView
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(handleDragSelect(_:)))
+            pan.delegate = self
+            pan.maximumNumberOfTouches = 1
+            collectionView.addGestureRecognizer(pan)
+            collectionView.panGestureRecognizer.require(toFail: pan)
+        }
+
+        func update(assets newAssets: [PHAsset], selectedIDs newSelection: [String], in collectionView: UICollectionView) {
+            let newIDs = newAssets.map(\.localIdentifier)
+            let assetsChanged = newIDs != assetIDs
+            let selectionChanged = newSelection != selectedIDs
+            assets = newAssets
+            assetIDs = newIDs
+            selectedIDs = newSelection
+            rebuildOrderMap()
+
+            if assetsChanged {
+                collectionView.reloadData()
+            } else if selectionChanged {
+                refreshVisibleBadges(in: collectionView)
+            }
+        }
+
+        private func rebuildOrderMap() {
+            var map: [String: Int] = [:]
+            map.reserveCapacity(selectedIDs.count)
+            for (index, id) in selectedIDs.enumerated() {
+                map[id] = index + 1
+            }
+            selectionOrderMap = map
+        }
+
+        private func refreshVisibleBadges(in collectionView: UICollectionView) {
+            for cell in collectionView.visibleCells {
+                guard let photoCell = cell as? PhotoAssetCell,
+                      let indexPath = collectionView.indexPath(for: cell),
+                      indexPath.item < assets.count else { continue }
+                let id = assets[indexPath.item].localIdentifier
+                photoCell.updateSelection(order: selectionOrderMap[id])
+            }
+        }
+
+        private func commitSelection(_ updated: [String]) {
+            guard updated != selectedIDs else { return }
+            selectedIDs = updated
+            rebuildOrderMap()
+            if let collectionView {
+                refreshVisibleBadges(in: collectionView)
+            }
+            selectedIDsBinding.wrappedValue = updated
+        }
+
+        // MARK: - UICollectionViewDataSource / Delegate
+
+        func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+            assets.count
+        }
+
+        func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: PhotoAssetCell.reuseID, for: indexPath) as! PhotoAssetCell
+            let asset = assets[indexPath.item]
+            cell.configure(asset: asset, store: store, selectionOrder: selectionOrderMap[asset.localIdentifier])
+            return cell
+        }
+
+        func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+            guard indexPath.item < assets.count else { return }
+            let id = assets[indexPath.item].localIdentifier
+            var updated = selectedIDs
+            if let idx = updated.firstIndex(of: id) {
+                updated.remove(at: idx)
+            } else if updated.count < maxSelection {
+                updated.append(id)
+            }
+            feedback.selectionChanged()
+            commitSelection(updated)
+        }
+
+        // MARK: - Drag Multi-Select (Horizontal start, then free 2D drag + edge auto-scroll)
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer,
+                  let collectionView else { return false }
+            let velocity = pan.velocity(in: collectionView)
+            // 横向起手触发滑动多选，纵向起手交给 UICollectionView 正常上下滚动
+            guard abs(velocity.x) > abs(velocity.y) * 1.05, abs(velocity.x) > 20 else {
+                return false
+            }
+            let location = pan.location(in: collectionView)
+            return collectionView.indexPathForItem(at: location) != nil
+        }
+
+        @objc private func handleDragSelect(_ pan: UIPanGestureRecognizer) {
+            guard let collectionView else { return }
+            let contentPoint = pan.location(in: collectionView)
+            dragPointInViewport = CGPoint(
+                x: contentPoint.x - collectionView.contentOffset.x,
+                y: contentPoint.y - collectionView.contentOffset.y
+            )
+
+            switch pan.state {
+            case .began:
+                guard let indexPath = collectionView.indexPathForItem(at: contentPoint),
+                      indexPath.item < assets.count else { return }
+                let startID = assets[indexPath.item].localIdentifier
+                dragStartIndex = indexPath.item
+                dragBaseSelection = selectedIDs
+                dragSelectMode = selectionOrderMap[startID] == nil
+                lastDragIndex = nil
+                feedback.prepare()
+                applyDragRange(to: indexPath.item)
+                startAutoScrollIfNeeded()
+
+            case .changed:
+                if let index = nearestItemIndex(at: contentPoint, in: collectionView) {
+                    applyDragRange(to: index)
+                }
+                startAutoScrollIfNeeded()
+
+            default:
+                stopAutoScroll()
+                dragStartIndex = nil
+                dragBaseSelection = []
+                lastDragIndex = nil
+            }
+        }
+
+        private func nearestItemIndex(at point: CGPoint, in collectionView: UICollectionView) -> Int? {
+            guard !assets.isEmpty else { return nil }
+            if let indexPath = collectionView.indexPathForItem(at: point) {
+                return indexPath.item
+            }
+            // 手指落在格子 2pt 间隙或左右边缘时，找最近的有效格子
+            let clampedX = min(max(point.x, 4), max(4, collectionView.bounds.width - 4))
+            let clampedY = min(max(point.y, 4), max(4, collectionView.contentSize.height - 4))
+            let probes: [CGPoint] = [
+                CGPoint(x: clampedX, y: clampedY),
+                CGPoint(x: clampedX + 4, y: clampedY),
+                CGPoint(x: clampedX - 4, y: clampedY),
+                CGPoint(x: clampedX, y: clampedY + 4),
+                CGPoint(x: clampedX, y: clampedY - 4),
+            ]
+            for probe in probes {
+                if let indexPath = collectionView.indexPathForItem(at: probe) {
+                    return indexPath.item
+                }
+            }
+            return nil
+        }
+
+        private func applyDragRange(to currentIndex: Int) {
+            guard let startIndex = dragStartIndex, currentIndex != lastDragIndex else { return }
+            lastDragIndex = currentIndex
+
+            let indices: [Int]
+            if currentIndex >= startIndex {
+                indices = Array(startIndex...currentIndex)
+            } else {
+                indices = Array((currentIndex...startIndex).reversed())
+            }
+
+            var updated: [String]
+            if dragSelectMode {
+                updated = dragBaseSelection
+                var existing = Set(updated)
+                for idx in indices where idx >= 0 && idx < assets.count {
+                    guard updated.count < maxSelection else { break }
+                    let id = assets[idx].localIdentifier
+                    if existing.insert(id).inserted {
+                        updated.append(id)
+                    }
+                }
+            } else {
+                var toRemove = Set<String>()
+                for idx in indices where idx >= 0 && idx < assets.count {
+                    toRemove.insert(assets[idx].localIdentifier)
+                }
+                updated = dragBaseSelection.filter { !toRemove.contains($0) }
+            }
+
+            if updated != selectedIDs {
+                feedback.selectionChanged()
+                commitSelection(updated)
+            }
+        }
+
+        private func startAutoScrollIfNeeded() {
+            guard autoScrollLink == nil else { return }
+            let link = CADisplayLink(target: self, selector: #selector(stepAutoScroll))
+            link.add(to: .main, forMode: .common)
+            autoScrollLink = link
+        }
+
+        private func stopAutoScroll() {
+            autoScrollLink?.invalidate()
+            autoScrollLink = nil
+        }
+
+        @objc private func stepAutoScroll() {
+            guard dragStartIndex != nil, let collectionView else {
+                stopAutoScroll()
+                return
+            }
+            let edgeZone: CGFloat = 56
+            let maxSpeed: CGFloat = 14
+            let visibleHeight = collectionView.bounds.height
+            let minY = -collectionView.adjustedContentInset.top
+            let maxY = max(minY, collectionView.contentSize.height - visibleHeight + collectionView.adjustedContentInset.bottom)
+
+            var delta: CGFloat = 0
+            if dragPointInViewport.y < edgeZone {
+                let factor = max(0, min(1, (edgeZone - dragPointInViewport.y) / edgeZone))
+                delta = -maxSpeed * factor
+            } else if dragPointInViewport.y > visibleHeight - edgeZone {
+                let factor = max(0, min(1, (dragPointInViewport.y - (visibleHeight - edgeZone)) / edgeZone))
+                delta = maxSpeed * factor
+            }
+            guard abs(delta) > 0.2 else { return }
+
+            let nextY = min(maxY, max(minY, collectionView.contentOffset.y + delta))
+            guard abs(nextY - collectionView.contentOffset.y) > 0.1 else { return }
+
+            collectionView.contentOffset.y = nextY
+            let contentPoint = CGPoint(
+                x: dragPointInViewport.x + collectionView.contentOffset.x,
+                y: dragPointInViewport.y + collectionView.contentOffset.y
+            )
+            if let index = nearestItemIndex(at: contentPoint, in: collectionView) {
+                applyDragRange(to: index)
+            }
+        }
+    }
+}
+
+private final class PhotoGridCollectionView: UICollectionView {
+    private var lastLayoutWidth: CGFloat = 0
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = bounds.width
+        guard width > 0, abs(width - lastLayoutWidth) > 0.5,
+              let flow = collectionViewLayout as? UICollectionViewFlowLayout else { return }
+        lastLayoutWidth = width
+        let spacing: CGFloat = 2
+        let side = floor((width - spacing * 3) / 4)
+        flow.itemSize = CGSize(width: side, height: side)
+        flow.invalidateLayout()
+    }
+}
+
+private final class PhotoAssetCell: UICollectionViewCell {
+    static let reuseID = "PhotoAssetCell"
+
+    private let imageView = UIImageView()
+    private let dimView = UIView()
+    private let badgeLabel = UILabel()
+    private weak var store: FastPhotoStore?
+    private var representedAssetID: String?
+    private var requestID: PHImageRequestID = PHInvalidImageRequestID
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.backgroundColor = UIColor.secondarySystemFill
+        contentView.clipsToBounds = true
+
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(imageView)
+
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.18)
+        dimView.isHidden = true
+        dimView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(dimView)
+
+        badgeLabel.font = UIFont.systemFont(ofSize: 12, weight: .bold)
+        badgeLabel.textAlignment = .center
+        badgeLabel.textColor = .white
+        badgeLabel.layer.cornerRadius = 11
+        badgeLabel.layer.masksToBounds = true
+        badgeLabel.layer.borderWidth = 1.5
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(badgeLabel)
+
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            dimView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            dimView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            dimView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            badgeLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
+            badgeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -5),
+            badgeLabel.widthAnchor.constraint(equalToConstant: 22),
+            badgeLabel.heightAnchor.constraint(equalToConstant: 22),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        if requestID != PHInvalidImageRequestID {
+            store?.cancelRequest(requestID)
+            requestID = PHInvalidImageRequestID
+        }
+        representedAssetID = nil
+        imageView.image = nil
+        updateSelection(order: nil)
+    }
+
+    func configure(asset: PHAsset, store: FastPhotoStore, selectionOrder: Int?) {
+        self.store = store
+        let id = asset.localIdentifier
+        updateSelection(order: selectionOrder)
+
+        if representedAssetID == id, imageView.image != nil {
+            return
+        }
+        if requestID != PHInvalidImageRequestID {
             store.cancelRequest(requestID)
             requestID = PHInvalidImageRequestID
         }
-    }
+        representedAssetID = id
 
-    @ViewBuilder
-    private var selectionBadge: some View {
-        if let selectionOrder {
-            Text("\(selectionOrder)")
-                .font(.caption2.bold())
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Color.accentColor, in: Circle())
-                .overlay(Circle().stroke(.white, lineWidth: 1.5))
-        } else {
-            Circle()
-                .stroke(.white.opacity(0.9), lineWidth: 1.5)
-                .background(Circle().fill(.black.opacity(0.25)))
-                .frame(width: 22, height: 22)
-        }
-    }
-
-    private func loadThumbnail() {
-        if let cached = store.cachedThumbnail(for: asset.localIdentifier) {
-            image = cached
+        if let cached = store.cachedThumbnail(for: id) {
+            imageView.image = cached
             return
         }
-        requestID = store.requestThumbnail(for: asset, targetSize: CGSize(width: 280, height: 280)) { loaded in
-            if let loaded {
-                image = loaded
-            }
+        imageView.image = nil
+        requestID = store.requestThumbnail(for: asset, targetSize: CGSize(width: 280, height: 280)) { [weak self] loaded in
+            guard let self, self.representedAssetID == id, let loaded else { return }
+            self.imageView.image = loaded
+        }
+    }
+
+    func updateSelection(order: Int?) {
+        if let order {
+            dimView.isHidden = false
+            badgeLabel.text = "\(order)"
+            badgeLabel.backgroundColor = tintColor
+            badgeLabel.layer.borderColor = UIColor.white.cgColor
+        } else {
+            dimView.isHidden = true
+            badgeLabel.text = nil
+            badgeLabel.backgroundColor = UIColor.black.withAlphaComponent(0.25)
+            badgeLabel.layer.borderColor = UIColor.white.withAlphaComponent(0.9).cgColor
         }
     }
 }
