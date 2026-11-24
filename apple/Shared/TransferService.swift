@@ -16,6 +16,7 @@ final class TransferService: ObservableObject {
     static let shared = TransferService()
     static let group = "group.com.chongyang.quicktransfer"
     @Published var peers: [Peer] = []
+    @Published private var cachedPeers: [Peer] = []
     @Published var selected: String? { didSet { settings.lastPeer = selected; saveSettings() } }
     @Published var text = ""
     @Published var attachments: [URL] = []
@@ -39,6 +40,7 @@ final class TransferService: ObservableObject {
     private var bonjour: BonjourDiscovery?
     private var hasStarted = false
     private var outgoingDrafts: [String:(String,[URL])] = [:]
+    private var peerGraceTask: Task<Void, Never>?
     #if os(iOS)
     private var photoImportBatches = 0
     #endif
@@ -83,6 +85,11 @@ final class TransferService: ObservableObject {
             self.error = "配置读取失败：\(error.localizedDescription)"
         }
         selected = settings.lastPeer
+        let cachedPeersFile = root.appendingPathComponent("last_peers.json")
+        if let data = try? Data(contentsOf: cachedPeersFile),
+           let loaded = try? JSONDecoder().decode([Peer].self, from: data) {
+            cachedPeers = loaded
+        }
         let history = root.appendingPathComponent("history.json")
         if FileManager.default.fileExists(atPath: history.path) {
             do {
@@ -102,10 +109,23 @@ final class TransferService: ObservableObject {
         RunLoop.main.add(timer!,forMode:.common)
         cleanExpiredOutbox()
     }
+    var displayPeers: [Peer] {
+        guard !cachedPeers.isEmpty else { return peers }
+        var merged: [String: Peer] = [:]
+        for peer in cachedPeers { merged[peer.id] = peer }
+        for peer in peers { merged[peer.id] = peer }
+        return merged.values.sorted { $0.alias.localizedStandardCompare($1.alias) == .orderedAscending }
+    }
+    func isPeerOnline(_ id: String) -> Bool {
+        ready && peers.contains(where: { $0.id == id })
+    }
     func start(portOverride: UInt16? = nil) {
         guard !hasStarted else { return }
         guard error == nil else { return }
         hasStarted = true
+        if !cachedPeers.isEmpty {
+            schedulePeerGraceTimeout()
+        }
         #if os(macOS)
         let mobile = false
         let model = "Mac"
@@ -116,8 +136,30 @@ final class TransferService: ObservableObject {
         sendJSON(["root":root.path,"alias":settings.alias,"model":model,"mobile":mobile,"port":portOverride ?? settings.port,"multicast": !mobile], to: qt_start)
     }
     func stop() {
+        if !peers.isEmpty {
+            cachedPeers = peers
+            saveCachedPeers(peers)
+        }
+        peerGraceTask?.cancel()
+        peerGraceTask = nil
         bonjour?.stop(); bonjour = nil
         qt_stop(); ready = false; hasStarted = false; peers = []
+    }
+    private func schedulePeerGraceTimeout() {
+        peerGraceTask?.cancel()
+        peerGraceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.cachedPeers = []
+            self.peerGraceTask = nil
+        }
+    }
+    private func saveCachedPeers(_ list: [Peer]) {
+        guard !list.isEmpty else { return }
+        let file = root.appendingPathComponent("last_peers.json")
+        if let data = try? JSONEncoder().encode(list) {
+            try? data.write(to: file, options: .atomic)
+        }
     }
     func restart() { error = nil; stop(); start() }
     func refresh() { if ready { command(["action":"refresh"]); bonjour?.refresh() } else { restart() } }
@@ -571,7 +613,16 @@ final class TransferService: ObservableObject {
             do {
                 let data = try JSONSerialization.data(withJSONObject:value["devices"] ?? [])
                 peers = try JSONDecoder().decode([Peer].self,from:data).sorted { $0.alias.localizedStandardCompare($1.alias) == .orderedAscending }
-                if selected == nil, peers.count == 1 { selected = peers[0].id }
+                if !peers.isEmpty {
+                    saveCachedPeers(peers)
+                    let onlineIDs = Set(peers.map(\.id))
+                    if !cachedPeers.isEmpty && cachedPeers.allSatisfy({ onlineIDs.contains($0.id) }) {
+                        cachedPeers = []
+                        peerGraceTask?.cancel()
+                        peerGraceTask = nil
+                    }
+                }
+                if selected == nil, displayPeers.count == 1 { selected = displayPeers[0].id }
             } catch { self.error = "读取设备失败：\(error.localizedDescription)" }
         case "offline": peers.removeAll { $0.id == id }
         case "incoming":

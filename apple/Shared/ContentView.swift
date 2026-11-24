@@ -167,7 +167,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var deviceSection: some View {
-        if service.peers.isEmpty {
+        let visiblePeers = service.displayPeers
+        if visiblePeers.isEmpty {
             HStack(spacing:8) {
                 Spacer()
                 if !service.ready { ProgressView().controlSize(.small) }
@@ -179,8 +180,9 @@ struct ContentView: View {
             .padding(.vertical,20)
         } else {
             let listContent = VStack(spacing:6) {
-                ForEach(service.peers) { peer in
+                ForEach(visiblePeers) { peer in
                     let isSelected = service.selected == peer.id
+                    let isOnline = service.isPeerOnline(peer.id)
                     Button { service.selected = peer.id } label: {
                         HStack(spacing:12) {
                             Image(systemName:peer.mobile ? "iphone":"desktopcomputer")
@@ -201,8 +203,10 @@ struct ContentView: View {
                             if isSelected {
                                 Image(systemName:"checkmark.circle.fill")
                                     .foregroundStyle(.tint)
+                                    .opacity(isOnline ? 1 : 0.45)
                             }
                         }
+                        .opacity(isOnline ? 1 : 0.65)
                         .padding(.horizontal,12)
                         .padding(.vertical,10)
                         .background(
@@ -218,8 +222,9 @@ struct ContentView: View {
             }
             .padding(.horizontal,14)
             .padding(.vertical,10)
+            .animation(.easeInOut(duration:0.2),value:visiblePeers.map(\.id))
 
-            if service.peers.count > 3 {
+            if visiblePeers.count > 3 {
                 ScrollView { listContent }
                     .frame(maxHeight:184)
             } else {
