@@ -6,16 +6,18 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using QuickTransfer.Infrastructure;
 using QuickTransfer.Models;
 using QuickTransfer.Services;
 
 namespace QuickTransfer.ViewModels;
 
-public sealed partial class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly TransferCore core;
     private readonly ReceivedFileStore receivedFiles;
+    private readonly GalleryFileWatcher fileWatcher;
     private readonly HashSet<string> pinnedPaths;
     private readonly HashSet<string> lastLivePeerIds = new(StringComparer.Ordinal);
     private CancellationTokenSource? toastCts;
@@ -76,6 +78,9 @@ public sealed partial class MainViewModel : ObservableObject
         Settings = settings;
         pinnedPaths = settings.ReadPinnedPaths();
         receivedFiles = new ReceivedFileStore(settings.Root);
+        fileWatcher = new GalleryFileWatcher(
+            paths => Application.Current?.Dispatcher.BeginInvoke(() => _ = PruneMissingGalleryFilesAsync(paths)),
+            () => Application.Current?.Dispatcher.BeginInvoke(() => _ = PruneMissingGalleryFilesAsync()));
         SendCommand = new Command(_ => Send(), _ => ready && !sending && SelectedDevice != null && (Text.Length > 0 || Attachments.Count > 0));
         RemoveCommand = new Command(value => { if (value is Attachment file) Attachments.Remove(file); });
         RefreshCommand = new Command(_ => Run(() =>
@@ -298,26 +303,87 @@ public sealed partial class MainViewModel : ObservableObject
             files.Select(file => Path.GetFullPath(file.Path)),
             StringComparer.OrdinalIgnoreCase);
         if (targets.Count == 0) return;
+        await RemoveGalleryPathsAsync(targets, targets.Count == 1 ? "已移除记录" : $"已移除 {targets.Count} 条记录");
+    }
+
+    public async Task DeleteGalleryFilesAsync(Window owner, IEnumerable<Attachment> files)
+    {
+        var targets = new HashSet<string>(
+            files.Select(file => Path.GetFullPath(file.Path)),
+            StringComparer.OrdinalIgnoreCase);
+        if (targets.Count == 0) return;
+        try
+        {
+            await ShellFileActions.MoveToRecycleBinAsync(owner, targets.ToArray());
+            await RemoveGalleryPathsAsync(targets, targets.Count == 1 ? "已移至回收站" : $"已将 {targets.Count} 个文件移至回收站");
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { Report(error); }
+    }
+
+    public async Task PruneMissingGalleryFilesAsync(IEnumerable<string>? candidatePaths = null)
+    {
+        if (Gallery.Count == 0) return;
+        HashSet<string>? filter = null;
+        if (candidatePaths != null)
+        {
+            filter = new HashSet<string>(candidatePaths.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
+            if (filter.Count == 0) return;
+        }
+        var pathsToCheck = Gallery
+            .Select(item => Path.GetFullPath(item.File.Path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(path => filter == null || filter.Contains(path))
+            .ToArray();
+        if (pathsToCheck.Length == 0) return;
+        var missing = await Task.Run(() =>
+            pathsToCheck.Where(path => !File.Exists(path)).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        if (missing.Count == 0) return;
+        await RemoveGalleryPathsAsync(missing, toastMessage: null);
+    }
+
+    private async Task RemoveGalleryPathsAsync(HashSet<string> targets, string? toastMessage)
+    {
+        if (targets.Count == 0) return;
+        var removedAny = false;
         var pinChanged = false;
         foreach (var item in Gallery.Where(item => targets.Contains(Path.GetFullPath(item.File.Path))).ToArray())
         {
             Gallery.Remove(item);
+            removedAny = true;
             if (pinnedPaths.Remove(Path.GetFullPath(item.File.Path))) pinChanged = true;
         }
-        foreach (var record in Records.Where(r => !r.Active && !Gallery.Any(item => item.Record == r)).ToArray())
+        foreach (var attachment in Attachments.Where(file => targets.Contains(Path.GetFullPath(file.Path))).ToArray())
+            Attachments.Remove(attachment);
+        if (removedAny)
         {
-            Records.Remove(record);
-            rows.Remove(record.Id);
+            foreach (var record in Records.Where(r => !r.Active && !Gallery.Any(item => item.Record == r)).ToArray())
+            {
+                Records.Remove(record);
+                rows.Remove(record.Id);
+            }
+            if (pinChanged)
+            {
+                var snapshot = pinnedPaths.ToArray();
+                _ = Task.Run(() => { try { Settings.SavePinnedPaths(snapshot); } catch { } });
+            }
+            RebuildGalleryTimeline();
         }
-        if (pinChanged)
-        {
-            var snapshot = pinnedPaths.ToArray();
-            _ = Task.Run(() => { try { Settings.SavePinnedPaths(snapshot); } catch { } });
-        }
-        RebuildGalleryTimeline();
         try { await receivedFiles.RemoveAsync(targets); }
         catch { }
-        ShowToast(targets.Count == 1 ? "已移除记录" : $"已移除 {targets.Count} 条记录");
+        if (!string.IsNullOrEmpty(toastMessage)) ShowToast(toastMessage);
+    }
+
+    private void SyncFileWatcher() =>
+        fileWatcher.SyncDirectories(Gallery.Select(item => item.File.Path));
+
+    public void Dispose()
+    {
+        fileWatcher.Dispose();
+        toastCts?.Cancel();
+        toastCts?.Dispose();
+        graceCleanupCts?.Cancel();
+        graceCleanupCts?.Dispose();
     }
 
     private HashSet<string> BuildProtectedOutboxPaths(bool includePinned)

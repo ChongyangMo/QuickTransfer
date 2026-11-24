@@ -2,10 +2,12 @@ using System;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using QuickTransfer.Models;
+using QuickTransfer.Views;
 
 namespace QuickTransfer;
 
@@ -101,6 +103,28 @@ public partial class MainWindow
         ClearGallerySelection();
     }
 
+    private async void DeleteGallerySelection(object sender, RoutedEventArgs args)
+    {
+        var items = GalleryList.SelectedItems.OfType<GalleryItem>().Select(item => item.File).ToArray();
+        if (items.Length == 0) return;
+        if (await DeleteGalleryFilesWithConfirmAsync(items))
+            ClearGallerySelection();
+    }
+
+    internal async Task<bool> DeleteGalleryFilesWithConfirmAsync(Attachment[] targets)
+    {
+        var distinct = targets.DistinctBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (distinct.Length == 0) return false;
+        var message = distinct.Length == 1
+            ? $"确定将“{distinct[0].Name}”移至回收站吗？"
+            : $"确定将选中的 {distinct.Length} 个文件移至回收站吗？";
+        var dialog = new PromptWindow(this, "删除文件", "删除", "取消");
+        dialog.AddPreview(message);
+        if (dialog.ShowDialog() != true) return false;
+        await Model.DeleteGalleryFilesAsync(this, distinct);
+        return true;
+    }
+
     private void CopyGallerySelection(object sender, RoutedEventArgs args)
     {
         Model.Run(() =>
@@ -125,6 +149,8 @@ public partial class MainWindow
         if (Keyboard.Modifiers == ModifierKeys.Control && args.Key == Key.A) { SelectAllGallery(this, args); return true; }
         if (Keyboard.Modifiers == ModifierKeys.Control && args.Key == Key.C && Model.HasGallerySelection)
         { CopyGallerySelection(this, args); return true; }
+        if (Keyboard.Modifiers == ModifierKeys.None && args.Key == Key.Delete && Model.HasGallerySelection)
+        { DeleteGallerySelection(this, args); return true; }
         return false;
     }
 }

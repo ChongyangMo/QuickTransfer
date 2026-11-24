@@ -54,6 +54,7 @@ public partial class MainWindow : Window
             if (incomingId == id) { incomingId = ""; incomingDialog?.Close(); }
         };
         model.TextReceived += (alias, text) => Dispatcher.BeginInvoke(() => ShowReceivedText(alias, text));
+        Activated += (_, _) => _ = Model.PruneMissingGalleryFilesAsync();
     }
 
     protected override void OnClosing(CancelEventArgs args)

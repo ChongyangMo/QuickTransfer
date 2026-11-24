@@ -66,7 +66,11 @@ public partial class App : Application
             desktop?.Dispose();
             desktop = null;
             if (core != null) await core.DisposeAsync();
-            if (model != null) await model.CloseVerificationAsync();
+            if (model != null)
+            {
+                model.Dispose();
+                await model.CloseVerificationAsync();
+            }
         }
         catch (Exception error) { System.Diagnostics.Trace.WriteLine("退出快传失败：" + error.Message); }
         finally { Shutdown(); }

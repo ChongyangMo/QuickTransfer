@@ -12,6 +12,7 @@
       <MenuItem Header="属性" Click="ShowFileProperties" />
       <Separator x:Name="BottomSeparator" />
       <MenuItem x:Name="RemoveMenuItem" Header="移除记录" Click="RemoveFromGallery" />
+      <MenuItem x:Name="DeleteMenuItem" Header="删除文件" Foreground="{DynamicResource DangerBrush}" Click="DeleteFile" />
     </ContextMenu>
   </UserControl.ContextMenu>
   <UserControl.Resources>

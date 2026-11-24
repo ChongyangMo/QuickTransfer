@@ -83,5 +83,6 @@ public sealed partial class MainViewModel
         }
         Notify(nameof(AllGallerySelected));
         Notify(nameof(SelectAllLabel));
+        SyncFileWatcher();
     }
 }

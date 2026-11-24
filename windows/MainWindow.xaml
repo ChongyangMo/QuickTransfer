@@ -66,7 +66,9 @@
           <Button Style="{StaticResource FlatSendButton}" Content="重发" Click="ResendGallerySelection" Margin="4,0,0,0"
                   IsEnabled="{Binding HasGallerySelection}" AutomationProperties.Name="重新发送选中文件" />
           <Button Style="{StaticResource FlatSendButton}" Content="移除" Click="RemoveGallerySelection" Margin="4,0,0,0"
-                  IsEnabled="{Binding HasGallerySelection}" Foreground="{DynamicResource DangerBrush}" AutomationProperties.Name="移除选中记录" />
+                  IsEnabled="{Binding HasGallerySelection}" Foreground="{DynamicResource MutedBrush}" ToolTip="仅移除记录（不删除磁盘文件）" AutomationProperties.Name="移除选中记录" />
+          <Button Style="{StaticResource FlatSendButton}" Content="删除" Click="DeleteGallerySelection" Margin="4,0,0,0"
+                  IsEnabled="{Binding HasGallerySelection}" Foreground="{DynamicResource DangerBrush}" ToolTip="删除文件到回收站 (Delete)" AutomationProperties.Name="删除选中文件" />
           <Button Style="{StaticResource FlatSendButton}" Content="{Binding SelectAllLabel}" Click="ToggleAllGallery" Margin="4,0,0,0"
                   AutomationProperties.Name="{Binding SelectAllLabel}" />
           <Button Style="{StaticResource FlatSendButton}" Content="取消" Click="CancelGallerySelection" Margin="4,0,0,0"

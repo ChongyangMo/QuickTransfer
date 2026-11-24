@@ -58,6 +58,7 @@ public partial class FileTile : UserControl
         TopSeparator.Visibility = visibility;
         BottomSeparator.Visibility = visibility;
         RemoveMenuItem.Visibility = visibility;
+        DeleteMenuItem.Visibility = visibility;
         if (DataContext is Attachment file)
             PinMenuItem.Header = file.IsPinned ? "取消置顶" : "置顶";
     }
@@ -81,6 +82,13 @@ public partial class FileTile : UserControl
         if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
         var targets = window.GalleryActionTargets(file);
         await window.Model.RemoveGalleryItemsAsync(targets);
+    }
+
+    private async void DeleteFile(object sender, RoutedEventArgs args)
+    {
+        if (DataContext is not Attachment file || Window.GetWindow(this) is not MainWindow window) return;
+        var targets = window.GalleryActionTargets(file);
+        await window.DeleteGalleryFilesWithConfirmAsync(targets);
     }
 
     private void OpenInExplorer(object sender, RoutedEventArgs args) =>
