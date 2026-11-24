@@ -63,13 +63,20 @@ final class TransferService: ObservableObject {
             }
         } catch { fatalError("迁移存储失败：\(error.localizedDescription)") }
         root=location
-        let alias = UIDevice.current.name
+        let alias = Self.defaultDeviceAlias()
         #endif
         let config = root.appendingPathComponent("settings.json")
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: config.path) {
                 settings = try JSONDecoder().decode(Settings.self, from: Data(contentsOf: config))
+                #if os(iOS)
+                let trimmed = settings.alias.trimmingCharacters(in: .whitespacesAndNewlines)
+                if (trimmed.isEmpty || trimmed == UIDevice.current.model) && alias != trimmed {
+                    settings.alias = alias
+                    try? JSONEncoder().encode(settings).write(to: config, options: .atomic)
+                }
+                #endif
             } else { settings = Settings(alias: alias) }
         } catch {
             settings = Settings(alias: alias)
@@ -549,6 +556,67 @@ final class TransferService: ObservableObject {
         verification.event(value)
         #endif
     }
+    #if os(iOS)
+    private static func defaultDeviceAlias() -> String {
+        let systemName = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let genericModel = UIDevice.current.model
+        // 若应用已获得 user-assigned-device-name 权限，UIDevice.current.name 会直接返回用户自定义名称
+        if !systemName.isEmpty && systemName != genericModel {
+            return systemName
+        }
+        return hardwareMarketingName() ?? (systemName.isEmpty ? genericModel : systemName)
+    }
+
+    private static func hardwareMarketingName() -> String? {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let identifier = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
+        }
+        let table: [String: String] = [
+            "iPhone18,1": "iPhone 17 Pro",
+            "iPhone18,2": "iPhone 17 Pro Max",
+            "iPhone18,3": "iPhone 17",
+            "iPhone18,4": "iPhone Air",
+            "iPhone17,1": "iPhone 16 Pro",
+            "iPhone17,2": "iPhone 16 Pro Max",
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            "iPhone17,5": "iPhone 16e",
+            "iPhone16,1": "iPhone 15 Pro",
+            "iPhone16,2": "iPhone 15 Pro Max",
+            "iPhone15,4": "iPhone 15",
+            "iPhone15,5": "iPhone 15 Plus",
+            "iPhone15,2": "iPhone 14 Pro",
+            "iPhone15,3": "iPhone 14 Pro Max",
+            "iPhone14,7": "iPhone 14",
+            "iPhone14,8": "iPhone 14 Plus",
+            "iPhone14,2": "iPhone 13 Pro",
+            "iPhone14,3": "iPhone 13 Pro Max",
+            "iPhone14,4": "iPhone 13 mini",
+            "iPhone14,5": "iPhone 13",
+            "iPhone13,1": "iPhone 12 mini",
+            "iPhone13,2": "iPhone 12",
+            "iPhone13,3": "iPhone 12 Pro",
+            "iPhone13,4": "iPhone 12 Pro Max",
+            "iPad11,3": "iPad Air",
+            "iPad11,4": "iPad Air",
+            "iPad13,1": "iPad Air",
+            "iPad13,2": "iPad Air",
+            "iPad13,16": "iPad Air",
+            "iPad13,17": "iPad Air",
+            "iPad14,8": "iPad Air 11\"",
+            "iPad14,9": "iPad Air 11\"",
+            "iPad14,10": "iPad Air 13\"",
+            "iPad14,11": "iPad Air 13\"",
+            "iPad16,3": "iPad Pro 11\"",
+            "iPad16,4": "iPad Pro 11\"",
+            "iPad16,5": "iPad Pro 13\"",
+            "iPad16,6": "iPad Pro 13\"",
+        ]
+        return table[identifier]
+    }
+    #endif
     private func saveHistory() {
         do { try JSONEncoder().encode(rows.filter(\.finished)).write(to:root.appendingPathComponent("history.json"),options:.atomic) }
         catch { self.error = "保存接收记录失败：\(error.localizedDescription)" }

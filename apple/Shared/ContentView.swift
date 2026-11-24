@@ -540,6 +540,8 @@ struct SettingsView:View {
     @ObservedObject var service:TransferService
     @Environment(\.dismiss) private var dismiss
     @State private var showClearCacheConfirm = false
+    @State private var initialAlias = ""
+    @State private var initialPort: UInt16 = 53317
     private let presetDays = [3, 7, 30, 365]
 
     private var retentionDaysBinding: Binding<Double> {
@@ -549,26 +551,32 @@ struct SettingsView:View {
         )
     }
 
+    private var connectionChanged: Bool {
+        service.settings.alias != initialAlias || service.settings.port != initialPort
+    }
+
     var body:some View {
         NavigationStack {
             Form {
-                Section("设备连接") {
-                    TextField("设备名称",text:$service.settings.alias)
-                    TextField("端口",value:$service.settings.port,format:.number.grouping(.never))
-                    Button("保存并重新连接") {
-                        service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
-                        service.saveSettings()
-                        service.cleanExpiredOutbox()
-                        service.restart()
-                        dismiss()
+                Section("本机信息") {
+                    LabeledContent("设备名称") {
+                        TextField("例如：我的 iPhone",text:$service.settings.alias)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if connectionChanged {
+                        Button("应用更改并重新连接") {
+                            saveAndDismiss(forceRestart:true)
+                        }
+                        .frame(maxWidth:.infinity,alignment:.center)
                     }
                 }
-                Section {
-                    VStack(alignment:.leading,spacing:10) {
+                Section("发送缓存") {
+                    VStack(alignment:.leading,spacing:12) {
                         HStack {
-                            Text("缓存保留时间")
+                            Text("自动保留时间")
                             Spacer()
                             Text("\(service.settings.cacheRetentionDays) 天")
+                                .font(.body.weight(.medium))
                                 .foregroundStyle(.tint)
                                 .monospacedDigit()
                         }
@@ -579,20 +587,33 @@ struct SettingsView:View {
                         )
                         HStack(spacing:8) {
                             ForEach(presetDays, id:\.self) { days in
-                                Button("\(days)天") {
+                                let selected = service.settings.cacheRetentionDays == days
+                                Button {
                                     service.settings.cacheRetentionDays = days
+                                } label: {
+                                    Text("\(days)天")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                                        .frame(maxWidth:.infinity)
+                                        .padding(.vertical,6)
+                                        .background(
+                                            selected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.1),
+                                            in:Capsule()
+                                        )
                                 }
-                                .buttonStyle(.bordered)
-                                .tint(service.settings.cacheRetentionDays == days ? .accentColor : .secondary)
-                                .controlSize(.small)
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                     .padding(.vertical,4)
+
                     HStack {
-                        Text("当前缓存：\(service.cacheItemCount) 项 · \(ByteCountFormatter.string(fromByteCount:service.cacheSizeBytes,countStyle:.file))")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment:.leading,spacing:2) {
+                            Text("当前缓存")
+                            Text("\(service.cacheItemCount) 项 · \(ByteCountFormatter.string(fromByteCount:service.cacheSizeBytes,countStyle:.file))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Button("立即清理",role:.destructive) {
                             showClearCacheConfirm = true
@@ -600,19 +621,17 @@ struct SettingsView:View {
                         .buttonStyle(.borderless)
                         .disabled(service.cacheItemCount == 0)
                     }
-                } header: {
-                    Text("发送缓存清理")
-                } footer: {
-                    Text("清理发送缓存时，对应的发送历史记录也会自动清除。")
                 }
             }
             .navigationTitle("设置")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                Button("完成") {
-                    service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
-                    service.saveSettings()
-                    service.cleanExpiredOutbox()
-                    dismiss()
+                ToolbarItem(placement:.confirmationAction) {
+                    Button("完成") {
+                        saveAndDismiss(forceRestart:false)
+                    }
                 }
             }
             .alert("清除发送缓存？",isPresented:$showClearCacheConfirm) {
@@ -623,8 +642,22 @@ struct SettingsView:View {
             } message: {
                 Text("清除缓存会同时删除对应的发送历史记录，且无法恢复。")
             }
-            .onAppear { service.refreshCacheStats() }
+            .onAppear {
+                initialAlias = service.settings.alias
+                initialPort = service.settings.port
+                service.refreshCacheStats()
+            }
         }.frame(minWidth:340,minHeight:360)
+    }
+
+    private func saveAndDismiss(forceRestart: Bool) {
+        service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
+        service.saveSettings()
+        service.cleanExpiredOutbox()
+        if forceRestart || connectionChanged {
+            service.restart()
+        }
+        dismiss()
     }
 }
 struct AddressView:View {
