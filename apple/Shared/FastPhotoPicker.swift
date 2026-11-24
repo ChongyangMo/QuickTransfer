@@ -190,13 +190,14 @@ struct FastPhotoPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
+                    Button { Haptics.shared.play(.tap); dismiss() } label: {
                         Image(systemName: "chevron.left")
                     }
                     .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptics.shared.play(.tap)
                         dismiss()
                         onUseSystemPicker()
                     } label: {
@@ -233,6 +234,7 @@ struct FastPhotoPickerSheet: View {
     private var actionBar: some View {
         HStack(spacing: 10) {
             Button {
+                Haptics.shared.play(.tap)
                 selectedIDs.removeAll()
             } label: {
                 Text("取消选中")
@@ -246,6 +248,7 @@ struct FastPhotoPickerSheet: View {
             Spacer()
             if canSendDirectly {
                 Button {
+                    Haptics.shared.play(.tap)
                     commit(autoSend: false)
                 } label: {
                     Text("仅添加")
@@ -257,11 +260,13 @@ struct FastPhotoPickerSheet: View {
                 }
                 .buttonStyle(.plain)
                 Button("发送 (\(selectedIDs.count))") {
+                    Haptics.shared.play(.action)
                     commit(autoSend: true)
                 }
                 .buttonStyle(.borderedProminent)
             } else {
                 Button("添加 (\(selectedIDs.count))") {
+                    Haptics.shared.play(.tap)
                     commit(autoSend: false)
                 }
                 .buttonStyle(.borderedProminent)
@@ -326,7 +331,6 @@ private struct DragSelectPhotoGrid: UIViewRepresentable {
         private var lastDragIndex: Int?
         private var dragPointInViewport: CGPoint = .zero
         private var autoScrollLink: CADisplayLink?
-        private let feedback = UISelectionFeedbackGenerator()
 
         init(store: FastPhotoStore, selectedIDs: Binding<[String]>, maxSelection: Int) {
             self.store = store
@@ -414,7 +418,7 @@ private struct DragSelectPhotoGrid: UIViewRepresentable {
             } else if updated.count < maxSelection {
                 updated.append(id)
             }
-            feedback.selectionChanged()
+            Haptics.shared.play(.selection)
             commitSelection(updated)
         }
 
@@ -449,7 +453,6 @@ private struct DragSelectPhotoGrid: UIViewRepresentable {
                 dragBaseSelection = selectedIDs
                 dragSelectMode = selectionOrderMap[startID] == nil
                 lastDragIndex = nil
-                feedback.prepare()
                 applyDragRange(to: indexPath.item)
                 startAutoScrollIfNeeded()
 
@@ -521,7 +524,7 @@ private struct DragSelectPhotoGrid: UIViewRepresentable {
             }
 
             if updated != selectedIDs {
-                feedback.selectionChanged()
+                Haptics.shared.play(.selection)
                 commitSelection(updated)
             }
         }

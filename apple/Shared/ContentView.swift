@@ -14,6 +14,7 @@ struct ContentView: View {
     var shareMode = false
     @State private var importing = false
     @State private var showTextComposer = false
+    @State private var isPullRefreshingHeader = false
     @FocusState private var textFocused: Bool
     #if os(iOS)
     @State private var photos: [PhotosPickerItem] = []
@@ -32,7 +33,7 @@ struct ContentView: View {
                     Image(systemName:"exclamationmark.circle.fill").foregroundStyle(.red).padding(.top,2)
                     Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
                     Spacer(minLength:8)
-                    Button { service.error=nil } label: { Image(systemName:"xmark").font(.caption.bold()).foregroundStyle(.secondary) }.buttonStyle(.plain).accessibilityLabel("关闭错误")
+                    Button { Haptics.shared.play(.tap); service.error=nil } label: { Image(systemName:"xmark").font(.caption.bold()).foregroundStyle(.secondary) }.buttonStyle(.plain).accessibilityLabel("关闭错误")
                 }
                 .padding(.horizontal,16)
                 .padding(.vertical,10)
@@ -63,6 +64,7 @@ struct ContentView: View {
                         .listRowInsets(EdgeInsets(top:6,leading:16,bottom:6,trailing:16))
                         .swipeActions(edge:.leading,allowsFullSwipe:true) {
                             Button {
+                                Haptics.shared.play(.action)
                                 withAnimation(.snappy(duration:0.25)) {
                                     service.togglePinRow(row.id)
                                 }
@@ -73,6 +75,7 @@ struct ContentView: View {
                         }
                         .swipeActions(edge:.trailing,allowsFullSwipe:true) {
                             Button(role:.destructive) {
+                                Haptics.shared.play(.warning)
                                 withAnimation(.snappy(duration:0.25)) {
                                     service.deleteRow(row.id)
                                 }
@@ -82,12 +85,14 @@ struct ContentView: View {
                             if let text = row.text {
                                 Button {
                                     service.copy(text)
+                                    Haptics.shared.play(.complete)
                                 } label: {
                                     Label("复制",systemImage:"doc.on.doc")
                                 }
                                 .tint(.blue)
                             } else if !row.fileURLs.isEmpty {
                                 Button {
+                                    Haptics.shared.play(.action)
                                     service.stageExistingRowFiles(row)
                                 } label: {
                                     Label("重发",systemImage:"paperplane")
@@ -97,12 +102,24 @@ struct ContentView: View {
                         }
                 }
                 .listStyle(.plain)
+                .refreshable { await service.pullRefresh() }
                 .ignoresSafeArea(.keyboard,edges:.bottom)
             } else if !service.rows.isEmpty {
                 Divider()
                 ForEach(service.rows.filter{!$0.finished}.prefix(1)) { row in
                     TransferRowView(row:row,service:service).padding(.horizontal,16)
                 }
+            } else if !shareMode {
+                ScrollView {
+                    VStack(spacing:6) {
+                        Text("下拉刷新附近设备")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top,32)
+                    }
+                    .frame(maxWidth:.infinity)
+                }
+                .refreshable { await service.pullRefresh() }
             } else {
                 Spacer(minLength:0)
             }
@@ -120,11 +137,10 @@ struct ContentView: View {
                 .help(showTextComposer ? "收起文字输入" : "输入文字")
                 .accessibilityLabel("输入文字")
 
-                Button { service.refresh() } label:{ Image(systemName:"arrow.clockwise") }.help("刷新设备").accessibilityLabel("刷新设备")
                 if shareMode {
-                    Button { service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
+                    Button { Haptics.shared.play(.tap); service.showAddress=true } label:{ Image(systemName:"plus") }.help("添加设备").accessibilityLabel("添加设备")
                 } else {
-                    Button { service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置")
+                    Button { Haptics.shared.play(.tap); service.showSettings=true } label:{ Image(systemName:"gearshape") }.help("设置").accessibilityLabel("设置")
                 }
             }
         }
@@ -199,68 +215,105 @@ struct ContentView: View {
     @ViewBuilder
     private var deviceSection: some View {
         let visiblePeers = service.displayPeers
-        if visiblePeers.isEmpty {
-            HStack(spacing:8) {
-                Spacer()
-                if !service.ready { ProgressView().controlSize(.small) }
-                Text(service.ready ? "未发现附近设备" : "正在连接…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
+        VStack(spacing:0) {
+            if isPullRefreshingHeader {
+                HStack(spacing:6) {
+                    ProgressView().controlSize(.mini)
+                    Text("正在刷新附近设备…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top,8)
+                .transition(.opacity.combined(with:.move(edge:.top)))
             }
-            .padding(.vertical,20)
-        } else {
-            let listContent = VStack(spacing:6) {
-                ForEach(visiblePeers) { peer in
-                    let isSelected = service.selected == peer.id
-                    let isOnline = service.isPeerOnline(peer.id)
-                    Button { service.selected = peer.id } label: {
-                        HStack(spacing:12) {
-                            Image(systemName:peer.mobile ? "iphone":"desktopcomputer")
-                                .font(.title3)
-                                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                                .frame(width:28)
-                            Text(peer.alias)
-                                .font(.body.weight(isSelected ? .medium : .regular))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Spacer()
-                            if peer.trusted {
-                                Image(systemName:"lock.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .accessibilityLabel("已记住")
+            if visiblePeers.isEmpty {
+                HStack(spacing:8) {
+                    Spacer()
+                    if !service.ready { ProgressView().controlSize(.small) }
+                    Text(service.ready ? "未发现附近设备，下拉刷新" : "正在连接…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.vertical,20)
+            } else {
+                let listContent = VStack(spacing:6) {
+                    ForEach(visiblePeers) { peer in
+                        let isSelected = service.selected == peer.id
+                        let isOnline = service.isPeerOnline(peer.id)
+                        Button {
+                            if service.selected != peer.id {
+                                Haptics.shared.play(.selection)
+                                service.selected = peer.id
                             }
-                            if isSelected {
-                                Image(systemName:"checkmark.circle.fill")
-                                    .foregroundStyle(.tint)
-                                    .opacity(isOnline ? 1 : 0.45)
+                        } label: {
+                            HStack(spacing:12) {
+                                Image(systemName:peer.mobile ? "iphone":"desktopcomputer")
+                                    .font(.title3)
+                                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                                    .frame(width:28)
+                                Text(peer.alias)
+                                    .font(.body.weight(isSelected ? .medium : .regular))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Spacer()
+                                if peer.trusted {
+                                    Image(systemName:"lock.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityLabel("已记住")
+                                }
+                                if isSelected {
+                                    Image(systemName:"checkmark.circle.fill")
+                                        .foregroundStyle(.tint)
+                                        .opacity(isOnline ? 1 : 0.45)
+                                }
                             }
+                            .opacity(isOnline ? 1 : 0.65)
+                            .padding(.horizontal,12)
+                            .padding(.vertical,10)
+                            .background(
+                                RoundedRectangle(cornerRadius:12)
+                                    .fill(isSelected ? Color.accentColor.opacity(0.11) : Color.secondary.opacity(0.06))
+                            )
+                            .contentShape(RoundedRectangle(cornerRadius:12))
                         }
-                        .opacity(isOnline ? 1 : 0.65)
-                        .padding(.horizontal,12)
-                        .padding(.vertical,10)
-                        .background(
-                            RoundedRectangle(cornerRadius:12)
-                                .fill(isSelected ? Color.accentColor.opacity(0.11) : Color.secondary.opacity(0.06))
-                        )
-                        .contentShape(RoundedRectangle(cornerRadius:12))
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(peer.alias)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(peer.alias)
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+                .padding(.horizontal,14)
+                .padding(.vertical,10)
+                .animation(.easeInOut(duration:0.2),value:visiblePeers.map(\.id))
+
+                if visiblePeers.count > 3 {
+                    ScrollView { listContent }
+                        .frame(maxHeight:184)
+                        .refreshable { await service.pullRefresh() }
+                } else {
+                    listContent
                 }
             }
-            .padding(.horizontal,14)
-            .padding(.vertical,10)
-            .animation(.easeInOut(duration:0.2),value:visiblePeers.map(\.id))
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance:28)
+                .onEnded { value in
+                    guard !isPullRefreshingHeader,
+                          value.translation.height > 44,
+                          abs(value.translation.height) > abs(value.translation.width) * 1.4 else { return }
+                    triggerHeaderPullRefresh()
+                }
+        )
+        .animation(.snappy(duration:0.22),value:isPullRefreshingHeader)
+    }
 
-            if visiblePeers.count > 3 {
-                ScrollView { listContent }
-                    .frame(maxHeight:184)
-            } else {
-                listContent
-            }
+    private func triggerHeaderPullRefresh() {
+        isPullRefreshingHeader = true
+        Task {
+            await service.pullRefresh()
+            isPullRefreshingHeader = false
         }
     }
 
@@ -288,13 +341,13 @@ struct ContentView: View {
                     #endif
 
                     if !service.text.isEmpty {
-                        Button("清空") { service.text = "" }
+                        Button("清空") { Haptics.shared.play(.tap); service.text = "" }
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .buttonStyle(.plain)
                     }
                     Spacer()
-                    Button { closeTextComposer() } label: {
+                    Button { Haptics.shared.play(.tap); closeTextComposer() } label: {
                         Text("收起")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -328,7 +381,7 @@ struct ContentView: View {
             HStack(spacing:10) {
                 #if os(iOS)
                 if !shareMode {
-                    Button { showFastPhotoPicker = true } label: {
+                    Button { Haptics.shared.play(.tap); showFastPhotoPicker = true } label: {
                         Label("照片",systemImage:"photo")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
@@ -340,7 +393,7 @@ struct ContentView: View {
                 }
                 #endif
 
-                Button { importing = true } label: {
+                Button { Haptics.shared.play(.tap); importing = true } label: {
                     Label("文件",systemImage:"paperclip")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
@@ -388,6 +441,7 @@ struct ContentView: View {
         #if os(iOS)
         if let pasted = UIPasteboard.general.string, !pasted.isEmpty {
             service.text = pasted
+            Haptics.shared.play(.tap)
         }
         #else
         service.paste()
@@ -395,6 +449,7 @@ struct ContentView: View {
     }
 
     private func toggleTextComposer() {
+        Haptics.shared.play(.tap)
         if showTextComposer {
             closeTextComposer()
         } else {
@@ -485,7 +540,7 @@ struct TransferRowView: View {
             }
 
             if !row.finished && row.direction == "send" {
-                Button { service.command(["action":"cancel","id":row.id]) } label: {
+                Button { Haptics.shared.play(.warning); service.command(["action":"cancel","id":row.id]) } label: {
                     Image(systemName:"xmark.circle.fill")
                         .foregroundStyle(.secondary)
                         .frame(width:30,height:30)
@@ -600,12 +655,14 @@ struct TransferRowView: View {
         if let text = row.text {
             copyWithFeedback(text)
         } else if let url = existingFileURLs.first {
+            Haptics.shared.play(.tap)
             service.preview = url
         }
     }
 
     private func copyWithFeedback(_ text: String) {
         service.copy(text)
+        Haptics.shared.play(.complete)
         withAnimation(.easeInOut(duration:0.15)) {
             copiedFeedback = true
         }
@@ -626,7 +683,8 @@ struct ReceiveSheet: View {
             Text(incoming.alias).font(.title3.bold())
             Text(incoming.text.map{String($0.prefix(250))} ?? "\(incoming.count) 个文件 · \(ByteCountFormatter.string(fromByteCount:incoming.size,countStyle:.file))").lineLimit(6)
             Toggle("记住此设备，自动接收",isOn:$remember)
-            HStack { Button("拒绝",role:.cancel) { service.answer(accept:false,remember:false) };Spacer();Button("接收") { service.answer(accept:true,remember:remember) }.buttonStyle(.borderedProminent) }
+                .onChange(of:remember) { _,_ in Haptics.shared.play(.selection) }
+            HStack { Button("拒绝",role:.cancel) { Haptics.shared.play(.warning); service.answer(accept:false,remember:false) };Spacer();Button("接收") { Haptics.shared.play(.action); service.answer(accept:true,remember:remember) }.buttonStyle(.borderedProminent) }
         }.padding(24).frame(minWidth:300).interactiveDismissDisabled()
     }
 }
@@ -637,12 +695,23 @@ struct SettingsView:View {
     @State private var showClearCacheConfirm = false
     @State private var initialAlias = ""
     @State private var initialPort: UInt16 = 53317
+    @State private var lastSliderHapticBucket = -1
     private let presetDays = [3, 7, 30, 365]
 
     private var retentionDaysBinding: Binding<Double> {
         Binding(
             get: { Double(service.settings.cacheRetentionDays) },
-            set: { service.settings.cacheRetentionDays = Settings.clampedRetentionDays(Int($0.rounded())) }
+            set: {
+                let next = Settings.clampedRetentionDays(Int($0.rounded()))
+                if next != service.settings.cacheRetentionDays {
+                    service.settings.cacheRetentionDays = next
+                    let bucket = next / 5
+                    if bucket != lastSliderHapticBucket {
+                        lastSliderHapticBucket = bucket
+                        Haptics.shared.play(.selection)
+                    }
+                }
+            }
         )
     }
 
@@ -689,6 +758,7 @@ struct SettingsView:View {
                             ForEach(presetDays, id:\.self) { days in
                                 let selected = service.settings.cacheRetentionDays == days
                                 Button {
+                                    Haptics.shared.play(.selection)
                                     service.settings.cacheRetentionDays = days
                                 } label: {
                                     Text("\(days)天")
@@ -716,6 +786,7 @@ struct SettingsView:View {
                         }
                         Spacer()
                         Button("立即清理",role:.destructive) {
+                            Haptics.shared.play(.warning)
                             showClearCacheConfirm = true
                         }
                         .buttonStyle(.borderless)
@@ -735,8 +806,9 @@ struct SettingsView:View {
                 }
             }
             .alert("清除发送缓存？",isPresented:$showClearCacheConfirm) {
-                Button("取消",role:.cancel) {}
+                Button("取消",role:.cancel) { Haptics.shared.play(.tap) }
                 Button("清除缓存和记录",role:.destructive) {
+                    Haptics.shared.play(.confirm)
                     service.clearOutboxCacheNow()
                 }
             } message: {
@@ -745,12 +817,14 @@ struct SettingsView:View {
             .onAppear {
                 initialAlias = service.settings.alias
                 initialPort = service.settings.port
+                lastSliderHapticBucket = service.settings.cacheRetentionDays / 5
                 service.refreshCacheStats()
             }
         }.frame(minWidth:340,minHeight:360)
     }
 
     private func saveAndDismiss(forceRestart: Bool) {
+        Haptics.shared.play(forceRestart || connectionChanged ? .confirm : .tap)
         service.settings.cacheRetentionDays = Settings.clampedRetentionDays(service.settings.cacheRetentionDays)
         service.saveSettings()
         service.cleanExpiredOutbox()

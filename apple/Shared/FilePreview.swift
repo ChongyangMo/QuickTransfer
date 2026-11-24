@@ -10,7 +10,7 @@ struct FileStrip: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing:8) {
                 ForEach(Array(urls.enumerated()),id:\.offset) { _,url in
-                    Button { service.preview=url } label: {
+                    Button { Haptics.shared.play(.tap); service.preview=url } label: {
                         FileThumbnail(url:url)
                             .frame(width:76,height:76)
                             .background(.quaternary.opacity(0.6),in:RoundedRectangle(cornerRadius:10))
@@ -24,7 +24,7 @@ struct FileStrip: View {
                     .onDrag { NSItemProvider(contentsOf:url) ?? NSItemProvider(object:url as NSURL) }
                     .overlay(alignment:.topTrailing) {
                         if removable {
-                            Button { service.removeAttachment(url) } label:{
+                            Button { Haptics.shared.play(.warning); service.removeAttachment(url) } label:{
                                 Image(systemName:"xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white,.black.opacity(0.65)).frame(width:28,height:28)
                             }.buttonStyle(.plain).accessibilityLabel("移除 \(url.lastPathComponent)")
                         }

@@ -166,20 +166,18 @@ final class TransferService: ObservableObject {
         let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         command(["action":"probe","host":trimmed,"port":port])
-        showToast(success: true, text: "正在连接 \(trimmed)…")
+        showToast(success: true, text: "正在连接 \(trimmed)…", haptic: .action)
     }
     func dismissToast() {
         toastTask?.cancel()
         toastTask = nil
         toast = nil
     }
-    private func showToast(success: Bool, text: String) {
+    private func showToast(success: Bool, text: String, haptic: HapticIntent? = nil) {
         toastTask?.cancel()
         let item = StatusToast(success: success, text: text)
         toast = item
-        #if os(iOS)
-        UINotificationFeedbackGenerator().notificationOccurred(success ? .success : .error)
-        #endif
+        Haptics.shared.play(haptic ?? (success ? .complete : .failure))
         let duration: UInt64 = success ? 2_200_000_000 : 3_200_000_000
         toastTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: duration)
@@ -197,6 +195,12 @@ final class TransferService: ObservableObject {
     }
     func restart() { error = nil; stop(); start() }
     func refresh() { if ready { command(["action":"refresh"]); bonjour?.refresh() } else { restart() } }
+    func pullRefresh() async {
+        Haptics.shared.play(.action)
+        refresh()
+        try? await Task.sleep(nanoseconds: 550_000_000)
+        Haptics.shared.play(.complete)
+    }
     func command(_ value: [String:Any]) { sendJSON(value, to: qt_command) }
     private func sendJSON(_ value: [String:Any], to call: (UnsafePointer<CChar>?) -> Void) {
         do {
@@ -216,6 +220,7 @@ final class TransferService: ObservableObject {
         }
         guard !text.isEmpty || !attachments.isEmpty else { error = "请选择文件或输入文字"; return }
         pendingAutoSend = false
+        Haptics.shared.play(.confirm)
         let id=UUID().uuidString
         outgoingDrafts[id]=(text,attachments)
         var value: [String:Any] = ["action":"send","peer":selected,"id":id,"paths":attachments.map(\.path)]
@@ -488,6 +493,7 @@ final class TransferService: ObservableObject {
             self.cacheItemCount = stats.count
             self.cacheSizeBytes = stats.bytes
             self.removeRows(withIDs: deadRowIDs)
+            Haptics.shared.play(.complete)
         }
     }
     func togglePinRow(_ id: String) {
