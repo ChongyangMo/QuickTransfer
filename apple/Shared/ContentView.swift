@@ -81,8 +81,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement:.primaryAction) {
                 Button { toggleTextComposer() } label: {
-                    Text("文")
-                        .font(.system(size:15,weight:.semibold))
+                    Image(systemName:"character.zh")
                         .foregroundStyle((showTextComposer || !service.text.isEmpty) ? Color.accentColor : Color.primary)
                 }
                 .help(showTextComposer ? "收起文字输入" : "输入文字")
@@ -262,12 +261,12 @@ struct ContentView: View {
                 #if os(iOS)
                 if !shareMode {
                     Button { showFastPhotoPicker = true } label: {
-                        Label("照片",systemImage:"photo.fill")
+                        Label("照片",systemImage:"photo")
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(.primary)
                             .padding(.horizontal,14)
                             .padding(.vertical,9)
-                            .background(Color.accentColor.opacity(0.13),in:Capsule())
+                            .background(Color.secondary.opacity(0.12),in:Capsule())
                     }
                     .buttonStyle(.plain)
                 }
