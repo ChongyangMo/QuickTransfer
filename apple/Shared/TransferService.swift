@@ -7,6 +7,7 @@ import AppKit
 import UIKit
 #endif
 #if os(iOS)
+import Photos
 import PhotosUI
 #endif
 
@@ -19,6 +20,8 @@ final class TransferService: ObservableObject {
     @Published var text = ""
     @Published var attachments: [URL] = []
     @Published private(set) var importingPhotos = false
+    @Published private(set) var importingPhotoCount = 0
+    @Published private(set) var pendingAutoSend = false
     @Published var rows: [TransferRow] = []
     @Published var incoming: Incoming?
     @Published var error: String?
@@ -87,6 +90,7 @@ final class TransferService: ObservableObject {
             Task { @MainActor in self?.poll() }
         }
         RunLoop.main.add(timer!,forMode:.common)
+        pruneUnusedOutbox()
     }
     func start(portOverride: UInt16? = nil) {
         guard !hasStarted else { return }
@@ -115,15 +119,35 @@ final class TransferService: ObservableObject {
             json.withCString { call($0) }
         } catch { self.error = "操作失败：\(error.localizedDescription)" }
     }
+    var canSendToSelectedPeer: Bool {
+        ready && selected != nil && peers.contains(where: { $0.id == selected })
+    }
     func send() {
         guard ready, let selected, peers.contains(where:{$0.id == selected}) else { error = "请选择在线设备"; return }
+        if importingPhotos {
+            pendingAutoSend = true
+            return
+        }
         guard !text.isEmpty || !attachments.isEmpty else { error = "请选择文件或输入文字"; return }
+        pendingAutoSend = false
         let id=UUID().uuidString
         outgoingDrafts[id]=(text,attachments)
         var value: [String:Any] = ["action":"send","peer":selected,"id":id,"paths":attachments.map(\.path)]
         if !text.isEmpty { value["text"] = text }
         command(value)
         text = ""; attachments = []
+    }
+    func removeAttachment(_ url: URL) {
+        attachments.removeAll { $0 == url }
+        if !importingPhotos && text.isEmpty && attachments.isEmpty {
+            pendingAutoSend = false
+        }
+        if !isURLReferenced(url) {
+            let root = self.root
+            Task.detached(priority: .utility) {
+                Self.deleteOutboxEntryIfOwned(url, root: root)
+            }
+        }
     }
     func answer(accept: Bool, remember: Bool) {
         guard let incoming else { return }
@@ -155,40 +179,133 @@ final class TransferService: ObservableObject {
         case failure(String)
     }
 
+    func stagePhotoAssets(_ assets: [PHAsset], autoSend: Bool = false) {
+        guard !assets.isEmpty else { return }
+        photoImportBatches += 1
+        importingPhotoCount += assets.count
+        importingPhotos = true
+        if autoSend { pendingAutoSend = true }
+        let root = self.root
+        Task { [weak self] in
+            guard let self else { return }
+            var hadFailure = false
+            var orderedResults: [Int: URL] = [:]
+            await withTaskGroup(of: (Int, PhotoImportResult).self) { group in
+                var nextIndex = 0
+                let concurrentLimit = min(4, assets.count)
+                for _ in 0..<concurrentLimit {
+                    let index = nextIndex
+                    let asset = assets[index]
+                    nextIndex += 1
+                    group.addTask {
+                        do {
+                            let url = try await PhotoAssetExporter.exportOriginal(asset, root: root)
+                            return (index, .success(url))
+                        } catch {
+                            return (index, .failure(error.localizedDescription))
+                        }
+                    }
+                }
+                while let (index, result) = await group.next() {
+                    self.importingPhotoCount = max(0, self.importingPhotoCount - 1)
+                    switch result {
+                    case .success(let url):
+                        if autoSend {
+                            orderedResults[index] = url
+                        } else {
+                            self.attachments.append(url)
+                        }
+                    case .failure(let message):
+                        hadFailure = true
+                        self.error = "读取照片失败：\(message)"
+                    }
+                    if nextIndex < assets.count {
+                        let next = nextIndex
+                        let asset = assets[next]
+                        nextIndex += 1
+                        group.addTask {
+                            do {
+                                let url = try await PhotoAssetExporter.exportOriginal(asset, root: root)
+                                return (next, .success(url))
+                            } catch {
+                                return (next, .failure(error.localizedDescription))
+                            }
+                        }
+                    }
+                }
+            }
+            if autoSend && !orderedResults.isEmpty {
+                let ordered = orderedResults.keys.sorted().compactMap { orderedResults[$0] }
+                attachments.append(contentsOf: ordered)
+            }
+            finishPhotoImportBatch(hadFailure: hadFailure)
+        }
+    }
+
     func stagePhotos(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         photoImportBatches += 1
+        importingPhotoCount += items.count
         importingPhotos = true
+        let root = self.root
+        let authStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        let canUsePhotoKit = authStatus == .authorized || authStatus == .limited
         Task { [weak self] in
             guard let self else { return }
+            var hadFailure = false
             await withTaskGroup(of: PhotoImportResult.self) { group in
                 var nextIndex = 0
-                let concurrentLimit = min(3, items.count)
+                let concurrentLimit = min(4, items.count)
                 for _ in 0..<concurrentLimit {
                     let item = items[nextIndex]
                     nextIndex += 1
-                    group.addTask { await Self.importPhoto(item) }
+                    group.addTask { await Self.importPhoto(item, root: root, canUsePhotoKit: canUsePhotoKit) }
                 }
                 while let result = await group.next() {
+                    self.importingPhotoCount = max(0, self.importingPhotoCount - 1)
                     switch result {
                     case .success(let url):
-                        attachments.append(url)
+                        self.attachments.append(url)
                     case .failure(let message):
-                        error = "读取照片失败：\(message)"
+                        hadFailure = true
+                        self.error = "读取照片失败：\(message)"
                     }
                     if nextIndex < items.count {
                         let item = items[nextIndex]
                         nextIndex += 1
-                        group.addTask { await Self.importPhoto(item) }
+                        group.addTask { await Self.importPhoto(item, root: root, canUsePhotoKit: canUsePhotoKit) }
                     }
                 }
             }
-            photoImportBatches = max(0, photoImportBatches - 1)
-            importingPhotos = photoImportBatches > 0
+            finishPhotoImportBatch(hadFailure: hadFailure)
         }
     }
 
-    private nonisolated static func importPhoto(_ item: PhotosPickerItem) async -> PhotoImportResult {
+    private func finishPhotoImportBatch(hadFailure: Bool) {
+        if hadFailure {
+            pendingAutoSend = false
+        }
+        photoImportBatches = max(0, photoImportBatches - 1)
+        importingPhotos = photoImportBatches > 0
+        if !importingPhotos {
+            importingPhotoCount = 0
+            if pendingAutoSend {
+                pendingAutoSend = false
+                if canSendToSelectedPeer && (!text.isEmpty || !attachments.isEmpty) {
+                    send()
+                }
+            }
+        }
+    }
+
+    private nonisolated static func importPhoto(_ item: PhotosPickerItem, root: URL, canUsePhotoKit: Bool) async -> PhotoImportResult {
+        if canUsePhotoKit, let id = item.itemIdentifier {
+            if let asset = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject {
+                if let url = try? await PhotoAssetExporter.exportOriginal(asset, root: root) {
+                    return .success(url)
+                }
+            }
+        }
         do {
             guard let photo = try await item.loadTransferable(type: ImportedPhoto.self) else {
                 return .failure("照片内容不可用")
@@ -199,6 +316,47 @@ final class TransferService: ObservableObject {
         }
     }
     #endif
+    private func isURLReferenced(_ url: URL) -> Bool {
+        let target = url.standardizedFileURL.path
+        if attachments.contains(where: { $0.standardizedFileURL.path == target }) { return true }
+        if outgoingDrafts.values.contains(where: { $0.1.contains(where: { $0.standardizedFileURL.path == target }) }) { return true }
+        if rows.contains(where: { $0.fileURLs.contains(where: { $0.standardizedFileURL.path == target }) }) { return true }
+        return false
+    }
+    private func pruneUnusedOutbox() {
+        let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
+        let prefix = outboxRoot.path + "/"
+        var keptFolders = Set<String>()
+        let collect: (URL) -> Void = { url in
+            let path = url.standardizedFileURL.path
+            guard path.hasPrefix(prefix) else { return }
+            let remainder = path.dropFirst(prefix.count)
+            if let folder = remainder.split(separator: "/").first {
+                keptFolders.insert(String(folder))
+            }
+        }
+        attachments.forEach(collect)
+        outgoingDrafts.values.forEach { $0.1.forEach(collect) }
+        rows.forEach { $0.fileURLs.forEach(collect) }
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            guard let entries = try? fm.contentsOfDirectory(at: outboxRoot, includingPropertiesForKeys: nil) else { return }
+            for entry in entries {
+                if !keptFolders.contains(entry.lastPathComponent) {
+                    try? fm.removeItem(at: entry)
+                }
+            }
+        }
+    }
+    private nonisolated static func deleteOutboxEntryIfOwned(_ url: URL, root: URL) {
+        let outboxRoot = root.appendingPathComponent("outbox", isDirectory: true).standardizedFileURL
+        let prefix = outboxRoot.path + "/"
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(prefix) else { return }
+        let remainder = path.dropFirst(prefix.count)
+        guard let folder = remainder.split(separator: "/").first else { return }
+        try? FileManager.default.removeItem(at: outboxRoot.appendingPathComponent(String(folder), isDirectory: true))
+    }
     nonisolated static func copyToOutbox(_ source: URL, root: URL) throws -> URL {
         let dir = root.appendingPathComponent("outbox").appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -259,7 +417,10 @@ final class TransferService: ObservableObject {
         case "dismiss": if incoming?.id == id { incoming = nil }
         case "transfer":
             rows.insert(TransferRow(id:id,name:value["name"] as? String ?? "",size:(value["size"] as? NSNumber)?.int64Value ?? 0,direction:value["direction"] as? String ?? "send",paths:value["paths"] as? [String]),at:0)
-            if rows.count > 30 { rows.removeLast(rows.count - 30) }
+            if rows.count > 30 {
+                rows.removeLast(rows.count - 30)
+                pruneUnusedOutbox()
+            }
         case "progress":
             if let index = rows.firstIndex(where:{$0.id == id}), !rows[index].finished { rows[index].bytes = (value["bytes"] as? NSNumber)?.int64Value ?? 0 }
         case "sent", "received":

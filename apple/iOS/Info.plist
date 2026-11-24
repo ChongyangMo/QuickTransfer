@@ -26,6 +26,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>发现附近设备并直接传输照片和文字。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>访问相册以快速选择并直接发送原图照片。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

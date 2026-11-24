@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var importing = false
     #if os(iOS)
     @State private var photos: [PhotosPickerItem] = []
+    @State private var showFastPhotoPicker = false
+    @State private var showSystemPhotoPicker = false
     #endif
     var body: some View {
         VStack(spacing:0) {
@@ -47,18 +49,30 @@ struct ContentView: View {
                 if !service.attachments.isEmpty {
                     FileStrip(urls:service.attachments,service:service,removable:true)
                 }
+                if service.importingPhotos {
+                    HStack(spacing:8) {
+                        ProgressView().controlSize(.small)
+                        Text(service.pendingAutoSend ? "正在准备原图，完成后自动发送…" : "正在读取原图（剩余 \(max(1, service.importingPhotoCount)) 张）…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 HStack(spacing:16) {
                     Button { importing=true } label:{ Label("文件",systemImage:"paperclip") }.buttonStyle(.borderless)
                     #if os(iOS)
                     if !shareMode {
-                        PhotosPicker(selection:$photos,maxSelectionCount:100,matching:.images,preferredItemEncoding:.current) { Label("照片",systemImage:"photo") }.buttonStyle(.borderless)
+                        Button { showFastPhotoPicker=true } label:{ Label("照片",systemImage:"photo") }.buttonStyle(.borderless)
                         PasteButton(payloadType:String.self) { strings in service.text=strings.joined(separator:"\n") }.labelStyle(.iconOnly).accessibilityLabel("粘贴文字")
                     }
                     #else
                     Button { service.paste() } label:{ Label("粘贴",systemImage:"doc.on.clipboard") }.buttonStyle(.borderless).keyboardShortcut("v",modifiers:.command)
                     #endif
                     Spacer(minLength:0)
-                    Button("发送") { service.send() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!service.ready || service.selected==nil || service.importingPhotos || (service.text.isEmpty && service.attachments.isEmpty)).keyboardShortcut(.return,modifiers:.command)
+                    Button(service.pendingAutoSend ? "等待发送" : "发送") { service.send() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(!service.canSendToSelectedPeer || service.pendingAutoSend || (!service.importingPhotos && service.text.isEmpty && service.attachments.isEmpty))
+                        .keyboardShortcut(.return,modifiers:.command)
                 }
             }.padding(16)
             if !shareMode && !service.rows.isEmpty {
@@ -90,6 +104,14 @@ struct ContentView: View {
         #if os(macOS)
         .frame(minWidth:370,minHeight:420)
         #else
+        .sheet(isPresented:$showFastPhotoPicker) {
+            FastPhotoPickerSheet(service:service) {
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.35) {
+                    showSystemPhotoPicker=true
+                }
+            }
+        }
+        .photosPicker(isPresented:$showSystemPhotoPicker,selection:$photos,maxSelectionCount:100,matching:.images,preferredItemEncoding:.current,photoLibrary:.shared())
         .onChange(of:photos) { _,items in
             guard !items.isEmpty else { return }
             photos=[]

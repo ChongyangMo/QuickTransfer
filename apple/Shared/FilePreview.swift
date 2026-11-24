@@ -23,7 +23,7 @@ struct FileStrip: View {
                     .onDrag { NSItemProvider(contentsOf:url) ?? NSItemProvider(object:url as NSURL) }
                     .overlay(alignment:.topTrailing) {
                         if removable {
-                            Button { service.attachments.removeAll{$0==url} } label:{
+                            Button { service.removeAttachment(url) } label:{
                                 Image(systemName:"xmark.circle.fill").symbolRenderingMode(.palette).foregroundStyle(.white,.black.opacity(0.65)).frame(width:32,height:32)
                             }.buttonStyle(.plain).accessibilityLabel("移除 \(url.lastPathComponent)")
                         }
@@ -48,9 +48,9 @@ private struct FileThumbnail: View {
             thumbnail=nil
             guard isImage else { return }
             let sourceURL=url
-            let decoded=await Task.detached(priority:.utility) {
+            let decoded=await Task.detached(priority:.userInitiated) {
                 guard let source=CGImageSourceCreateWithURL(sourceURL as CFURL,[kCGImageSourceShouldCache:false] as CFDictionary) else { return nil as CGImage? }
-                return CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceThumbnailMaxPixelSize:256,kCGImageSourceCreateThumbnailWithTransform:true] as CFDictionary)
+                return CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageIfAbsent:true,kCGImageSourceThumbnailMaxPixelSize:256,kCGImageSourceCreateThumbnailWithTransform:true] as CFDictionary)
             }.value
             if !Task.isCancelled { thumbnail=decoded }
         }

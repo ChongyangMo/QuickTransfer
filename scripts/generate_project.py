@@ -16,7 +16,7 @@ def plist(name, value):
 
 base = {"CFBundleDisplayName":"快传","CFBundleName":"QuickTransfer","CFBundleExecutable":"$(EXECUTABLE_NAME)","CFBundleIdentifier":"$(PRODUCT_BUNDLE_IDENTIFIER)","CFBundlePackageType":"APPL","CFBundleShortVersionString":"0.1.0","CFBundleVersion":"1","NSLocalNetworkUsageDescription":"发现附近设备并直接传输照片和文字。","NSBonjourServices":["_quicktransfer._tcp."]}
 plist("apple/Mac/Info.plist",dict(base,NSPrincipalClass="NSApplication",LSMinimumSystemVersion="14.0",NSHighResolutionCapable=True))
-plist("apple/iOS/Info.plist",dict(base,LSRequiresIPhoneOS=True,UILaunchScreen={},UISupportedInterfaceOrientations=["UIInterfaceOrientationPortrait","UIInterfaceOrientationLandscapeLeft","UIInterfaceOrientationLandscapeRight"],UIApplicationSceneManifest={"UIApplicationSupportsMultipleScenes":False},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True))
+plist("apple/iOS/Info.plist",dict(base,LSRequiresIPhoneOS=True,NSPhotoLibraryUsageDescription="访问相册以快速选择并直接发送原图照片。",UILaunchScreen={},UISupportedInterfaceOrientations=["UIInterfaceOrientationPortrait","UIInterfaceOrientationLandscapeLeft","UIInterfaceOrientationLandscapeRight"],UIApplicationSceneManifest={"UIApplicationSupportsMultipleScenes":False},UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True))
 plist("apple/ShareHost/Info.plist",dict(base,CFBundleDisplayName="分享检查",LSRequiresIPhoneOS=True,UILaunchScreen={},UIApplicationSceneManifest={"UIApplicationSupportsMultipleScenes":False}))
 plist("apple/iOS/QuickTransfer.entitlements",{"com.apple.security.application-groups":["group.com.chongyang.quicktransfer"]})
 plist("apple/Share/Info.plist",dict(base,CFBundlePackageType="XPC!",NSExtension={"NSExtensionPointIdentifier":"com.apple.share-services","NSExtensionPrincipalClass":"$(PRODUCT_MODULE_NAME).ShareViewController","NSExtensionAttributes":{"NSExtensionActivationRule":{"NSExtensionActivationSupportsText":True,"NSExtensionActivationSupportsWebURLWithMaxCount":10,"NSExtensionActivationSupportsImageWithMaxCount":100,"NSExtensionActivationSupportsMovieWithMaxCount":10,"NSExtensionActivationSupportsFileWithMaxCount":100}}}))
@@ -27,7 +27,7 @@ product_group=uid("products")
 main_group=uid("main")
 source_refs={}
 for path in sorted((ROOT/"apple").rglob("*.swift")):
-    relative=str(path.relative_to(ROOT))
+    relative=path.relative_to(ROOT).as_posix()
     ref=add("file:"+relative,isa="PBXFileReference",lastKnownFileType="sourcecode.swift",path=relative,sourceTree="<group>")
     refs.append(ref);source_refs[relative]=ref
 asset_ref=add("assets",isa="PBXFileReference",lastKnownFileType="folder.assetcatalog",path="apple/Assets.xcassets",sourceTree="<group>")
@@ -40,7 +40,7 @@ for name,platform,bundle,entry in [("QuickTransferMac","macosx","com.chongyang.q
     product=add(name+":product",isa="PBXFileReference",explicitFileType="wrapper.app-extension" if extension else "wrapper.application",includeInIndex="0",path=name+(".appex" if extension else ".app"),sourceTree="BUILT_PRODUCTS_DIR")
     products.append(product)
     sources=[]
-    for path in ([] if host else [str(p.relative_to(ROOT)) for p in shared])+[str(p.relative_to(ROOT)) for p in sorted((ROOT/entry).parent.glob("*.swift"))]:
+    for path in ([] if host else [p.relative_to(ROOT).as_posix() for p in shared])+[p.relative_to(ROOT).as_posix() for p in sorted((ROOT/entry).parent.glob("*.swift"))]:
         # Share extensions use UIKit; desktop clipboard APIs are excluded by platform.
         sources.append(add(name+":source:"+path,isa="PBXBuildFile",fileRef=source_refs[path]))
     source_phase=add(name+":sources",isa="PBXSourcesBuildPhase",buildActionMask="2147483647",files=sources,runOnlyForDeploymentPostprocessing="0")
