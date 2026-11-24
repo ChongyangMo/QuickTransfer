@@ -195,13 +195,19 @@ struct FastPhotoPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .accessibilityLabel("取消")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("系统相册") {
+                    Button {
                         dismiss()
                         onUseSystemPicker()
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
                     }
+                    .accessibilityLabel("系统相册")
                 }
             }
             .onAppear { store.prepare() }

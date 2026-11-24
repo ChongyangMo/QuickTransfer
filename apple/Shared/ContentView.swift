@@ -110,6 +110,9 @@ struct ContentView: View {
                     showSystemPhotoPicker=true
                 }
             }
+            .presentationDetents([.fraction(0.64), .large])
+            .presentationBackgroundInteraction(.enabled(upThrough:.fraction(0.64)))
+            .presentationDragIndicator(.visible)
         }
         .photosPicker(isPresented:$showSystemPhotoPicker,selection:$photos,maxSelectionCount:100,matching:.images,preferredItemEncoding:.current,photoLibrary:.shared())
         .onChange(of:photos) { _,items in
